@@ -58,6 +58,7 @@ func CreateComputeSystem(id string, hcsDocumentInterface interface{}) (*System, 
 	}
 
 	hcsDocument := string(hcsDocumentB)
+	// fmt.Println(hcsDocument)
 	logrus.Debugf(title+" ID=%s config=%s", id, hcsDocument)
 
 	var (

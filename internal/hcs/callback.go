@@ -75,7 +75,9 @@ func notificationWatcher(notificationType hcsNotification, callbackNumber uintpt
 		return 0
 	}
 
-	context.channels[notificationType] <- result
+	if channel, ok := context.channels[notificationType]; ok {
+		channel <- result
+	}
 
 	return 0
 }

@@ -331,8 +331,8 @@ func Create(opts *UVMOptions) (_ *UtilityVM, err error) {
 		}
 	} else {
 		vmDebugging := false
-		vm.GuestConnection.UseVsock = true
-		vm.GuestConnection.UseConnectedSuspend = true
+		// vm.GuestConnection.UseVsock = true
+		// vm.GuestConnection.UseConnectedSuspend = true
 		vm.Devices.VirtualSmb = &hcsschema.VirtualSmb{
 			Shares: []hcsschema.VirtualSmbShare{
 				{
@@ -418,9 +418,10 @@ func Create(opts *UVMOptions) (_ *UtilityVM, err error) {
 
 		// Start GCS with stderr pointing to the vsock port created below in
 		// order to forward guest logs to logrus.
-		initArgs := fmt.Sprintf("/bin/vsockexec -e %d /bin/gcs -log-format json -loglevel %s",
-			linuxLogVsockPort,
-			logrus.StandardLogger().Level.String())
+		// initArgs := fmt.Sprintf("/bin/vsockexec -e %d /bin/gcs -log-format json -loglevel %s",
+		// 	linuxLogVsockPort,
+		// 	logrus.StandardLogger().Level.String())
+		initArgs := fmt.Sprintf("/bin/vsockexec -o %d /bin/uname", linuxLogVsockPort)
 
 		if vmDebugging {
 			// Launch a shell on the console.
