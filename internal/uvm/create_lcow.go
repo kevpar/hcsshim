@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/Microsoft/hcsshim/internal/guid"
@@ -54,6 +55,249 @@ type OptionsLCOW struct {
 }
 
 const linuxLogVsockPort = 109
+
+type kernelCmdLine struct {
+	kernelArgs map[string]string
+	initArgs   string
+}
+
+func normalizeKernelArgName(argName string) string {
+	return strings.Replace(argName, "-", "_", -1)
+}
+
+func (kernelCmd *kernelCmdLine) set(key string, value string) {
+	kernelCmd.kernelArgs[normalizeKernelArgName(key)] = value
+}
+
+func (kernelCmd *kernelCmdLine) delete(key string) {
+	delete(kernelCmd.kernelArgs, normalizeKernelArgName(key))
+}
+
+type KernelOpt func(*kernelCmdLine)
+
+func KernelOptPMemBoot(kernelCmd *kernelCmdLine) {
+	kernelCmd.set("root", "/dev/pmem0")
+	kernelCmd.set("ro", "")
+	kernelCmd.set("init", "/init")
+}
+
+func KernelOptInitRDBoot(kernelCmd *kernelCmdLine) {
+	kernelCmd.set("initrd", "/initrd.img")
+}
+
+func KernelOptInitArgs(initArgs string) KernelOpt {
+	return func(kernelCmd *kernelCmdLine) {
+		kernelCmd.initArgs = initArgs
+	}
+}
+
+func CreateKernelCommandLine(opts ...KernelOpt) string {
+	var kernelCmd = kernelCmdLine{
+		kernelArgs: make(map[string]string),
+	}
+
+	kernelCmd.kernelArgs["8250_core.nr_uarts"] = "0"
+	kernelCmd.kernelArgs["panic"] = "-1"
+	kernelCmd.kernelArgs["quiet"] = ""
+	kernelCmd.kernelArgs["pci"] = "off"
+	kernelCmd.kernelArgs["brd.rd_nr"] = "0"
+	kernelCmd.kernelArgs["pmtmr"] = "0"
+
+	kernelCmd.initArgs = fmt.Sprintf("/bin/vsockexec -e %d /bin/gcs -log-format json -loglevel %s",
+		linuxLogVsockPort,
+		logrus.StandardLogger().Level.String())
+
+	for _, opt := range opts {
+		opt(&kernelCmd)
+	}
+
+	var kernelCmdLine string
+	for name, value := range kernelCmd.kernelArgs {
+		if len(kernelCmdLine) != 0 {
+			kernelCmdLine += " "
+		}
+
+		if len(value) != 0 {
+			kernelCmdLine += name + "=" + value
+		} else {
+			kernelCmdLine += name
+		}
+	}
+
+	return kernelCmdLine + " -- " + kernelCmd.initArgs
+}
+
+type SchemaOpt func(*hcsschema.ComputeSystem)
+
+func SchemaOptLCOWKernelBoot(rootFSType PreferredRootFSType, kernelDirect bool, kernelCmdLine string) SchemaOpt {
+	return func(cs *hcsschema.ComputeSystem) {
+		bootFilesPath := filepath.Join(os.Getenv("ProgramFiles"), "Linux Containers")
+
+		switch rootFSType {
+		case PreferredRootFSTypeInitRd:
+			if kernelDirect {
+				cs.VirtualMachine.Chipset.LinuxKernelDirect = &hcsschema.LinuxKernelDirect{
+					KernelFilePath: filepath.Join(bootFilesPath, "kernel"),
+					InitRdPath:     filepath.Join(bootFilesPath, "initrd.img"),
+					KernelCmdLine:  kernelCmdLine,
+				}
+			} else {
+				cs.VirtualMachine.Devices.VirtualSmb = &hcsschema.VirtualSmb{
+					Shares: []hcsschema.VirtualSmbShare{
+						{
+							Name: "os",
+							Path: bootFilesPath,
+							Options: &hcsschema.VirtualSmbShareOptions{
+								ReadOnly:            true,
+								TakeBackupPrivilege: true,
+								CacheIo:             true,
+								ShareRead:           true,
+							},
+						},
+					},
+				}
+
+				cs.VirtualMachine.Chipset.Uefi = &hcsschema.Uefi{
+					BootThis: &hcsschema.UefiBootEntry{
+						DevicePath:   `\kernel`,
+						DeviceType:   "VmbFs",
+						OptionalData: kernelCmdLine,
+					},
+				}
+			}
+		case PreferredRootFSTypeVHD:
+			if kernelDirect {
+				cs.VirtualMachine.Chipset.LinuxKernelDirect = &hcsschema.LinuxKernelDirect{
+					KernelFilePath: filepath.Join(bootFilesPath, "kernel"),
+					KernelCmdLine:  kernelCmdLine,
+				}
+
+				cs.VirtualMachine.Devices.VirtualPMem.Devices = map[string]hcsschema.VirtualPMemDevice{
+					"0": {
+						HostPath:    filepath.Join(bootFilesPath, "rootfs.vhd"),
+						ReadOnly:    true,
+						ImageFormat: "vhd",
+					},
+				}
+			} else {
+				cs.VirtualMachine.Devices.VirtualSmb = &hcsschema.VirtualSmb{
+					Shares: []hcsschema.VirtualSmbShare{
+						{
+							Name: "os",
+							Path: bootFilesPath,
+							Options: &hcsschema.VirtualSmbShareOptions{
+								ReadOnly:            true,
+								TakeBackupPrivilege: true,
+								CacheIo:             true,
+								ShareRead:           true,
+							},
+						},
+					},
+				}
+
+				cs.VirtualMachine.Devices.VirtualPMem.Devices = map[string]hcsschema.VirtualPMemDevice{
+					"0": {
+						HostPath:    filepath.Join(bootFilesPath, "rootfs.vhd"),
+						ReadOnly:    true,
+						ImageFormat: "vhd",
+					},
+				}
+
+				cs.VirtualMachine.Chipset.Uefi = &hcsschema.Uefi{
+					BootThis: &hcsschema.UefiBootEntry{
+						DevicePath:   `\kernel`,
+						DeviceType:   "VmbFs",
+						OptionalData: kernelCmdLine,
+					},
+				}
+			}
+		}
+	}
+}
+
+func SchemaOptOwner(owner string) SchemaOpt {
+	return func(cs *hcsschema.ComputeSystem) {
+		cs.Owner = owner
+	}
+}
+
+func SchemaOptCPUCount(count int32) SchemaOpt {
+	return func(cs *hcsschema.ComputeSystem) {
+		cs.VirtualMachine.ComputeTopology.Processor.Count = count
+	}
+}
+
+func SchemaOptMemorySize(sizeMB int32) SchemaOpt {
+	return func(cs *hcsschema.ComputeSystem) {
+		cs.VirtualMachine.ComputeTopology.Memory.SizeInMB = sizeMB
+	}
+}
+
+func SchemaOptOvercommit(allowOvercommit bool) SchemaOpt {
+	return func(cs *hcsschema.ComputeSystem) {
+		cs.VirtualMachine.ComputeTopology.Memory.AllowOvercommit = allowOvercommit
+	}
+}
+
+func SchemaOptDeferredCommit(enableDeferredCommit bool) SchemaOpt {
+	return func(cs *hcsschema.ComputeSystem) {
+		cs.VirtualMachine.ComputeTopology.Memory.EnableDeferredCommit = enableDeferredCommit
+	}
+}
+
+// CreateSchemaLCOW creates an HCS ComputeSystem schema object.
+func CreateSchemaLCOW(opts ...SchemaOpt) (*hcsschema.ComputeSystem, error) {
+	processors := int32(2)
+	if runtime.NumCPU() == 1 {
+		processors = 1
+	}
+
+	cs := &hcsschema.ComputeSystem{
+		Owner:         filepath.Base(os.Args[0]),
+		SchemaVersion: schemaversion.SchemaV21(),
+		VirtualMachine: &hcsschema.VirtualMachine{
+			Chipset: &hcsschema.Chipset{},
+			ComputeTopology: &hcsschema.Topology{
+				Memory: &hcsschema.Memory2{
+					SizeInMB:             1024,
+					AllowOvercommit:      true,
+					EnableDeferredCommit: false,
+				},
+				Processor: &hcsschema.Processor2{
+					Count: processors,
+				},
+			},
+			Devices: &hcsschema.Devices{
+				Scsi: map[string]hcsschema.Scsi{
+					"0": {
+						Attachments: make(map[string]hcsschema.Attachment),
+					},
+				},
+				VirtualPMem: &hcsschema.VirtualPMemController{
+					MaximumCount:     64,
+					MaximumSizeBytes: 4 * 1024 * 1024 * 1024,
+				},
+				HvSocket: &hcsschema.HvSocket2{
+					HvSocketConfig: &hcsschema.HvSocketSystemConfig{
+						// Allow administrators and SYSTEM to bind to vsock sockets
+						// so that we can create a GCS log socket.
+						DefaultBindSecurityDescriptor: "D:P(A;;FA;;;SY)(A;;FA;;;BA)",
+					},
+				},
+			},
+			GuestConnection: &hcsschema.GuestConnection{
+				UseVsock:            true,
+				UseConnectedSuspend: true,
+			},
+		},
+	}
+
+	for _, opt := range opts {
+		opt(cs)
+	}
+
+	return cs, nil
+}
 
 // CreateLCOW creates an HCS compute system representing a utility VM.
 func CreateLCOW(opts *OptionsLCOW) (_ *UtilityVM, err error) {
