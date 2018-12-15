@@ -315,10 +315,10 @@ func CreateLCOW(opts *OptionsLCOW) (_ *UtilityVM, err error) {
 
 	if vmDebugging {
 		// Launch a shell on the console.
-		initArgs = `sh -c "` + initArgs + ` & exec sh"`
+		// initArgs = `sh -c "` + initArgs + ` & exec sh"`
 	}
 
-	kernelArgs += ` pci=off brd.rd_nr=0 pmtmr=0 -- ` + initArgs
+	kernelArgs += ` pci=off brd.rd_nr=0 pmtmr=0`
 
 	if !opts.KernelDirect {
 		doc.VirtualMachine.Chipset.Uefi = &hcsschema.Uefi{
