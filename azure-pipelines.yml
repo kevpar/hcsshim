@@ -17,6 +17,8 @@ variables:
 
 steps:
 - script: |
+    pwd
+    ls
     mkdir -p '$(GOBIN)'
     mkdir -p '$(GOPATH)/pkg'
     mkdir -p '$(modulePath)'
