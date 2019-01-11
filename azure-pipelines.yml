@@ -10,13 +10,15 @@ pool:
   vmImage: 'Ubuntu-16.04'
 
 variables:
+  GOOS:   'windows' # OS to build binaries for
   GOBIN:  '$(GOPATH)/bin' # Go binaries path
   GOROOT: '/usr/local/go1.11' # Go installation path
   GOPATH: '$(system.defaultWorkingDirectory)/gopath' # Go workspace path
-  modulePath: '$(GOPATH)/src/github.com/Microsoft/hcsshim' # Path to the module's code
+  modulePath: '$(GOPATH)/src/github.com/$(build.repository.name)' # Path to the module's code
 
 steps:
 - script: |
+    echo FOO $modulePath
     mkdir -p '$(GOBIN)'
     mkdir -p '$(GOPATH)/pkg'
     mkdir -p '$(modulePath)'
@@ -24,13 +26,10 @@ steps:
     mv !(gopath) '$(modulePath)'
     echo '##vso[task.prependpath]$(GOBIN)'
     echo '##vso[task.prependpath]$(GOROOT)/bin'
-    jq --help
   displayName: 'Set up the Go workspace'
 
 - script: |
-    export GOOS=windows
     go version
-    cd $(modulePath)
     go get -v -t -d ./...
     if [ -f Gopkg.toml ]; then
         curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
