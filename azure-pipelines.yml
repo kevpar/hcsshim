@@ -19,7 +19,7 @@ variables:
 steps:
 - script: |
     export sourceRepoName=$(wget -O - 'https://api.github.com/repos/$(build.repository.name)' | jq -r .source.full_name)
-    echo "##vso[task.setvariable variable=modulePath]$(modulePathBase)/$(sourceRepoName)"
+    echo "##vso[task.setvariable variable=modulePath]$(modulePathBase)/$sourceRepoName"
   displayName: 'Set modulePath'
 
 - script: |
