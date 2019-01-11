@@ -41,6 +41,7 @@ steps:
     fi
     echo BUILD.begin
     go build -v .
+    echo $?
     echo BUILD.end
     pwd
     ls
