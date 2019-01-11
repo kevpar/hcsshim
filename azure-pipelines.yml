@@ -13,20 +13,15 @@ variables:
   GOBIN:  '$(GOPATH)/bin' # Go binaries path
   GOROOT: '/usr/local/go1.11' # Go installation path
   GOPATH: '$(system.defaultWorkingDirectory)/gopath' # Go workspace path
-  modulePath: '$(GOPATH)/src/github.com/$(build.repository.name)' # Path to the module's code
+  modulePath: '$(GOPATH)/src/github.com/Microsoft/hcsshim' # Path to the module's code
 
 steps:
 - script: |
-    pwd
-    ls
     mkdir -p '$(GOBIN)'
     mkdir -p '$(GOPATH)/pkg'
     mkdir -p '$(modulePath)'
     shopt -s extglob
-    echo TEST
-    echo mv !(gopath) '$(modulePath)'
     mv !(gopath) '$(modulePath)'
-    echo TEST
     echo '##vso[task.prependpath]$(GOBIN)'
     echo '##vso[task.prependpath]$(GOROOT)/bin'
   displayName: 'Set up the Go workspace'
@@ -39,11 +34,6 @@ steps:
         curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
         dep ensure
     fi
-    echo BUILD.begin
     go build -v .
-    echo $?
-    echo BUILD.end
-    pwd
-    ls
   workingDirectory: '$(modulePath)'
   displayName: 'Get dependencies, then build'
