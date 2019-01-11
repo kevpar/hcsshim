@@ -27,6 +27,7 @@ steps:
   displayName: 'Set up the Go workspace'
 
 - script: |
+    export GOOS=windows
     go version
     cd $(modulePath)
     go get -v -t -d ./...
