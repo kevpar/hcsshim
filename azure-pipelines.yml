@@ -20,6 +20,8 @@ steps:
 - script: |
     export foo=bar
     echo "##vso[task.setvariable variable=myfoo]$foo"
+    echo foo $(foo) , $foo
+    echo myfoo $(myfoo) , $myfoo
     mkdir -p '$(GOBIN)'
     mkdir -p '$(GOPATH)/pkg'
     mkdir -p '$(modulePath)'
