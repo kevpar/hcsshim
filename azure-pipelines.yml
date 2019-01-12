@@ -15,6 +15,7 @@ variables:
   GOROOT: '/usr/local/go1.11' # Go installation path
   GOPATH: '$(system.defaultWorkingDirectory)/gopath' # Go workspace path
   modulePathBase: '$(GOPATH)/src/github.com' # Path to the module's code
+  package: 'github.com/Microsoft/hcsshim/cmd/runhcs'
 
 steps:
 - script: |
@@ -23,8 +24,6 @@ steps:
   displayName: 'Set modulePath'
 
 - script: |
-    echo GOOS $GOOS
-    echo modulePath $(modulePath)
     mkdir -p '$(GOBIN)'
     mkdir -p '$(GOPATH)/pkg'
     mkdir -p '$(modulePath)'
@@ -41,6 +40,5 @@ steps:
         curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
         dep ensure
     fi
-    go build -v .
-  workingDirectory: '$(modulePath)'
+    go build -v $(package)
   displayName: 'Get dependencies, then build'
