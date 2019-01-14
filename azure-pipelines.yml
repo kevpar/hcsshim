@@ -44,10 +44,11 @@ steps:
   displayName: 'Get dependencies, then build'
 
 - script: |
-    mkdir pub
-    mv runhcs.exe pub
+    mv runhcs.exe $(Build.ArtifactStagingDirectory)
+  displayName: 'Move artifacts to staging directory'
 
 - task: PublishPipelineArtifact@0
   inputs:
     artifactName: 'runhcs'
-    targetPath: '$(system.defaultWorkingDirectory)/pub'
+    targetPath: '$(Build.ArtifactStagingDirectory)'
+  displayName: 'Publish artifacts'
