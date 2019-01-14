@@ -44,7 +44,7 @@ steps:
   displayName: 'Get dependencies, then build'
 
 - script: |
-    ls '$(system.defaultWorkingDirectory)
+    ls $(system.defaultWorkingDirectory)
 
 - task: PublishPipelineArtifact@0
   inputs:
