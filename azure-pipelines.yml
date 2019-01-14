@@ -43,6 +43,9 @@ steps:
     go build -v $(package)
   displayName: 'Get dependencies, then build'
 
+- script: |
+    ls '$(system.defaultWorkingDirectory)
+
 - task: PublishPipelineArtifact@0
   inputs:
     artifactName: 'runhcs'
