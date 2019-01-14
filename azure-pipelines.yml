@@ -46,4 +46,4 @@ steps:
 - task: PublishPipelineArtifact@0
   inputs:
     artifactName: 'runhcs'
-    targetPath: 'runhcs.exe'
+    targetPath: '$(system.defaultWorkingDirectory)/runhcs.exe'
