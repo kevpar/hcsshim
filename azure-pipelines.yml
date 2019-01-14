@@ -42,3 +42,8 @@ steps:
     fi
     go build -v $(package)
   displayName: 'Get dependencies, then build'
+
+- task: PublishPipelineArtifact@0
+  inputs:
+    artifactName: 'runhcs'
+    targetPath: '$(package)/runhcs.exe'
