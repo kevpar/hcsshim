@@ -46,4 +46,4 @@ steps:
 - task: PublishPipelineArtifact@0
   inputs:
     artifactName: 'runhcs'
-    targetPath: '$(package)/runhcs.exe'
+    targetPath: 'runhcs.exe'
