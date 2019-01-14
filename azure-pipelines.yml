@@ -44,9 +44,10 @@ steps:
   displayName: 'Get dependencies, then build'
 
 - script: |
-    ls $(system.defaultWorkingDirectory)
+    mkdir pub
+    mv runhcs.exe pub
 
 - task: PublishPipelineArtifact@0
   inputs:
     artifactName: 'runhcs'
-    targetPath: '$(system.defaultWorkingDirectory)'
+    targetPath: '$(system.defaultWorkingDirectory)/pub'
