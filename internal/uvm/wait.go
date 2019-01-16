@@ -16,12 +16,14 @@ func (uvm *UtilityVM) waitForOutput() {
 // Waits synchronously waits for a utility VM to terminate.
 func (uvm *UtilityVM) Wait() error {
 	err := uvm.hcsSystem.Wait()
+	uvm.outputProcessingCancel()
 	uvm.waitForOutput()
 	return err
 }
 
 func (uvm *UtilityVM) WaitExpectedError(expected error) error {
 	err := uvm.hcsSystem.WaitExpectedError(expected)
+	uvm.outputProcessingCancel()
 	uvm.waitForOutput()
 	return err
 }
