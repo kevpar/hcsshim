@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<WindowsPerformanceRecorder Version="1">
+  <Profiles>
+
+    <EventCollector Id="Collector" Name="Collector">
+      <BufferSize Value="256"/>
+      <Buffers Value="1024"/>
+    </EventCollector>
+    
+    <EventProvider Id="TraceSample" Name="7cc9f168-07f7-5e23-4ecb-efeee8aba1af"/>
+
+    <Profile
+      Id="ContainerPlatform.Verbose.Memory"
+      Name="ContainerPlatform"
+      Description="Events related to the container platform on Windows"
+      LoggingMode="Memory"
+      DetailLevel="Verbose"
+      >
+      <Collectors>
+        <EventCollectorId Value="Collector">
+          <EventProviders>
+            <EventProviderId Value="TraceSample"/>
+          </EventProviders>
+        </EventCollectorId>
+      </Collectors>
+    </Profile>
+
+    <Profile
+      Id="ContainerPlatform.Verbose.File"
+      Name="ContainerPlatform"
+      Description="Events related to the container platform on Windows"
+      LoggingMode="File"
+      DetailLevel="Verbose"
+      Base="ContainerPlatform.Verbose.Memory"
+      />
+
+  </Profiles>
+</WindowsPerformanceRecorder>

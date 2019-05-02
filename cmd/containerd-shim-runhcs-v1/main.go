@@ -10,6 +10,7 @@ import (
 	"github.com/Microsoft/go-winio/pkg/etw"
 	"github.com/Microsoft/go-winio/pkg/etwlogrus"
 	"github.com/Microsoft/go-winio/pkg/guid"
+	"github.com/Microsoft/hcsshim/internal/trace"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -74,6 +75,7 @@ func main() {
 	if err != nil {
 		logrus.Error(err)
 	} else {
+		trace.InitWithProvider(provider)
 		if hook, err := etwlogrus.NewHookFromProvider(provider); err == nil {
 			logrus.AddHook(hook)
 		} else {

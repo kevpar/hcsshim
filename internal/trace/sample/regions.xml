@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<InstrumentationManifest xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Instrumentation>
+    <Regions>
+      <RegionRoot Guid="{936fddc7-c470-470b-8ab1-2951b0d5afca}" Name="[Root]">
+        <Region Guid="{b09fd4b8-c770-448a-af24-bbf356ae2fcb}" Name="Span">
+          <Start>
+            <Event Provider="{7cc9f168-07f7-5e23-4ecb-efeee8aba1af}" Name="SpanBegin"/>
+          </Start>
+          <Stop>
+            <Event Provider="{7cc9f168-07f7-5e23-4ecb-efeee8aba1af}" Name="SpanEnd"/>
+          </Stop>
+          <Match>
+            <Event>
+              <Payload FieldName="Name"/>
+            </Event>
+          </Match>
+        </Region>
+      </RegionRoot>
+    </Regions>
+  </Instrumentation>
+</InstrumentationManifest>

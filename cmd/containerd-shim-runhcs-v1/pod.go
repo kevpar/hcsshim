@@ -9,6 +9,7 @@ import (
 
 	"github.com/Microsoft/hcsshim/internal/hcsoci"
 	"github.com/Microsoft/hcsshim/internal/oci"
+	"github.com/Microsoft/hcsshim/internal/trace"
 	"github.com/Microsoft/hcsshim/internal/uvm"
 	"github.com/Microsoft/hcsshim/osversion"
 	eventstypes "github.com/containerd/containerd/api/events"
@@ -54,9 +55,8 @@ type shimPod interface {
 }
 
 func createPod(ctx context.Context, events publisher, req *task.CreateTaskRequest, s *specs.Spec) (_ shimPod, err error) {
-	logrus.WithFields(logrus.Fields{
-		"tid": req.ID,
-	}).Debug("createPod")
+	ctx, span := trace.NewSpan(ctx, "createPod", nil)
+	defer func() { span.End(err) }()
 
 	if osversion.Get().Build < osversion.RS5 {
 		return nil, errors.Wrapf(errdefs.ErrFailedPrecondition, "pod support is not available on Windows versions previous to RS5 (%d)", osversion.RS5)

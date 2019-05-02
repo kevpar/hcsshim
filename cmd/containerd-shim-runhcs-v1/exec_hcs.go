@@ -13,6 +13,7 @@ import (
 	"github.com/Microsoft/hcsshim/internal/lcow"
 	hcsschema "github.com/Microsoft/hcsshim/internal/schema2"
 	"github.com/Microsoft/hcsshim/internal/signals"
+	"github.com/Microsoft/hcsshim/internal/trace"
 	"github.com/Microsoft/hcsshim/internal/uvm"
 	"github.com/Microsoft/hcsshim/osversion"
 	eventstypes "github.com/containerd/containerd/api/events"
@@ -51,10 +52,12 @@ func newHcsExec(
 	isWCOW bool,
 	spec *specs.Process,
 	io upstreamIO) shimExec {
-	logrus.WithFields(logrus.Fields{
-		"tid": tid,
-		"eid": id,
-	}).Debug("newHcsExec")
+
+	trace.Debug(ctx, "NewHCSExec",
+		[]trace.Field{
+			{"TaskID", tid},
+			{"ExecID", id},
+		})
 
 	processCtx, processDoneCancel := context.WithCancel(context.Background())
 	he := &hcsExec{
@@ -196,10 +199,11 @@ func copyAndLog(w io.Writer, r io.Reader, e *logrus.Entry, msg string) {
 }
 
 func (he *hcsExec) Start(ctx context.Context) (err error) {
-	logrus.WithFields(logrus.Fields{
-		"tid": he.tid,
-		"eid": he.id,
-	}).Debug("hcsExec::Start")
+	trace.Debug(ctx, "StartHCSExec",
+		[]trace.Field{
+			{"TaskID", he.tid},
+			{"ExecID", he.id},
+		})
 
 	he.sl.Lock()
 	defer he.sl.Unlock()
@@ -291,12 +295,21 @@ func (he *hcsExec) Start(ctx context.Context) (err error) {
 			return errors.New("hcsExec::Start - platform returned nil stdin pipe")
 		}
 		go func() {
+<<<<f<<< Updated upstream
 			copyAndLog(in, he.io.Stdin(),
 				logrus.WithFields(logrus.Fields{
 					"tid":  he.tid,
 					"eid":  he.id,
 					"file": "stdin",
 				}), "hcsExec::Start - Copy completed")
+=======
+			io.Copy(in, he.io.Stdin())
+			trace.Debug(ctx, "hcsExec::Start::Stdin - Copy completed", []trace.Field{
+				{"TaskID", he.tid},
+				{"ExecID", he.id},
+			}
+			in.Close()
+>>>>>f>> Stashed changes
 			he.p.CloseStdin()
 			he.io.CloseStdin()
 		}()
@@ -308,11 +321,19 @@ func (he *hcsExec) Start(ctx context.Context) (err error) {
 		}
 		he.ioWg.Add(1)
 		go func() {
+<<<<f<<< Updated upstream
 			copyAndLog(w, r, logrus.WithFields(logrus.Fields{
 				"tid":  he.tid,
 				"eid":  he.id,
 				"file": name,
 			}), "hcsExec::Start - Copy completed")
+=======
+			io.Copy(he.io.Stdout(), out)
+			trace.Debug(ctx, "hcsExec::Start::Stdout - Copy completed", []trace.Field{
+				{"TaskID", he.tid},
+				{"ExecID", he.id},
+			}
+>>>>f>>> Stashed changes
 			he.ioWg.Done()
 		}()
 		return nil
@@ -322,7 +343,19 @@ func (he *hcsExec) Start(ctx context.Context) (err error) {
 		if err = copyOut(he.io.Stdout(), out, "stdout"); err != nil {
 			return err
 		}
+<<<<<f<< Updated upstream
 	}
+=======
+		he.stderr = serr
+		he.ioWg.Add(1)
+		go func() {
+			io.Copy(he.io.Stderr(), serr)
+			trace.Debug(ctx, "hcsExec::Start::Stderr - Copy completed", []trace.Field{
+				{"TaskID", he.tid},
+				{"ExecID", he.id},
+			})
+			he.ioWg.Done()
+>>>f>>>> Stashed changes
 
 	if he.io.StderrPath() != "" {
 		if err = copyOut(he.io.Stderr(), serr, "stderr"); err != nil {
@@ -359,11 +392,11 @@ func (he *hcsExec) Start(ctx context.Context) (err error) {
 }
 
 func (he *hcsExec) Kill(ctx context.Context, signal uint32) error {
-	logrus.WithFields(logrus.Fields{
-		"tid":    he.tid,
-		"eid":    he.id,
-		"signal": signal,
-	}).Debug("hcsExec::Kill")
+	trace.Debug(ctx, "hcsExec::Kill", []trace.Field{
+		{"TaskID", he.tid},
+		{"ExecID", he.id},
+		{"Signal", signal},
+	})
 
 	he.sl.Lock()
 	defer he.sl.Unlock()
@@ -435,12 +468,12 @@ func (he *hcsExec) Kill(ctx context.Context, signal uint32) error {
 }
 
 func (he *hcsExec) ResizePty(ctx context.Context, width, height uint32) error {
-	logrus.WithFields(logrus.Fields{
-		"tid":    he.tid,
-		"eid":    he.id,
-		"width":  width,
-		"height": height,
-	}).Debug("hcsExec::ResizePty")
+	trace.Debug(ctx, "hcsExec::ResizePty", []trace.Field{
+		{"TaskID", he.tid},
+		{"ExecID", he.id},
+		{"Width", width},
+		{"Height", height},
+	})
 
 	he.sl.Lock()
 	defer he.sl.Unlock()
@@ -455,11 +488,11 @@ func (he *hcsExec) ResizePty(ctx context.Context, width, height uint32) error {
 }
 
 func (he *hcsExec) CloseIO(ctx context.Context, stdin bool) error {
-	logrus.WithFields(logrus.Fields{
-		"tid":   he.tid,
-		"eid":   he.id,
-		"stdin": stdin,
-	}).Debug("hcsExec::CloseIO")
+	trace.Debug(ctx, "hcsExec::CloseIO", []trace.Field{
+		{"TaskID", he.tid},
+		{"ExecID", he.id},
+		{"Stdin", stdin},
+	})
 
 	// If we have any upstream IO we close the upstream connection. This will
 	// unblock the `io.Copy` in the `Start()` call which will signal
