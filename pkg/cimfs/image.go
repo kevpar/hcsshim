@@ -137,6 +137,10 @@ func (cim *Image) RemoveFile(path string) error {
 	return cimRemoveFile(cim.handle, path)
 }
 
+func (cim *Image) AddLink(existingPath string, targetPath string) error {
+	return cimAddLink(cim.handle, existingPath, targetPath)
+}
+
 func MountImage(path string, g *guid.GUID) error {
 	return cimMountImage(path, g)
 }

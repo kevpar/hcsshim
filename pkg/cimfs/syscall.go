@@ -22,3 +22,4 @@ type g = guid.GUID
 //sys cimFinalizeStream(cimStreamHandle streamHandle) (hr error) = cimfs.CimFinalizeStream
 //sys cimWriteStream(cimStreamHandle streamHandle, buffer uintptr, bufferSize uint64) (hr error) = cimfs.CimWriteStream
 //sys cimRemoveFile(cimFSHandle imageHandle, path string) (hr error) = cimfs.CimRemoveFile
+//sys cimAddLink(cimFSHandle imageHandle, existingPath string, targetPath string) (hr error) = cimfs.CimAddLink
