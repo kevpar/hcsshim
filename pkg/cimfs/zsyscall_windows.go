@@ -152,7 +152,7 @@ func cimFinalizeStream(cimStreamHandle streamHandle) (hr error) {
 	return
 }
 
-func cimWriteStream(cimStreamHandle streamHandle, buffer uintptr, bufferSize uint64) (hr error) {
+func cimWriteStream(cimStreamHandle streamHandle, buffer uintptr, bufferSize uint32) (hr error) {
 	r0, _, _ := syscall.Syscall(procCimWriteStream.Addr(), 3, uintptr(cimStreamHandle), uintptr(buffer), uintptr(bufferSize))
 	if int32(r0) < 0 {
 		if r0&0x1fff0000 == 0x00070000 {
