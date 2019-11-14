@@ -82,9 +82,9 @@ var serveCommand = cli.Command{
 			shimOpts = newShimOpts
 		}
 
-		if shimOpts.Debug {
-			logrus.SetLevel(logrus.DebugLevel)
-		}
+		// if shimOpts.Debug {
+		logrus.SetLevel(logrus.DebugLevel)
+		// }
 
 		switch shimOpts.DebugType {
 		case runhcsopts.Options_NPIPE:

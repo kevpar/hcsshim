@@ -3,13 +3,17 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/Microsoft/go-winio/pkg/guid"
+	"github.com/Microsoft/hcsshim"
 	runhcsopts "github.com/Microsoft/hcsshim/cmd/containerd-shim-runhcs-v1/options"
 	"github.com/Microsoft/hcsshim/internal/oci"
 	"github.com/Microsoft/hcsshim/internal/shimdiag"
+	"github.com/Microsoft/hcsshim/pkg/cimfs"
 	containerd_v1_types "github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/mount"
@@ -18,6 +22,7 @@ import (
 	google_protobuf1 "github.com/gogo/protobuf/types"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
+	"golang.org/x/sys/windows"
 )
 
 var empty = &google_protobuf1.Empty{}
@@ -104,7 +109,7 @@ func (s *service) createInternal(ctx context.Context, req *task.CreateTaskReques
 		return nil, errors.Wrap(errdefs.ErrFailedPrecondition, "Rootfs does not contain exactly 1 mount for the root file system")
 	} else {
 		m := req.Rootfs[0]
-		if m.Type != "windows-layer" && m.Type != "lcow-layer" {
+		if m.Type != "windows-layer" && m.Type != "lcow-layer" && m.Type != "cimfs" {
 			return nil, errors.Wrapf(errdefs.ErrFailedPrecondition, "unsupported mount type '%s'", m.Type)
 		}
 
@@ -136,6 +141,23 @@ func (s *service) createInternal(ctx context.Context, req *task.CreateTaskReques
 			if spec.Root == nil {
 				spec.Root = &specs.Root{}
 			}
+		}
+
+		if m.Type == "cimfs" {
+			var parentLayerPathsReversed []string
+			// Mount each cim layer here
+			for i := len(parentLayerPaths) - 1; i >= 0; i-- {
+				g, err := hcsshim.NameToGuid(parentLayerPaths[i])
+				if err != nil {
+					return nil, errors.Wrap(err, "failed to generate layer GUID")
+				}
+				g2 := guid.FromWindowsArray(g)
+				if err := cimfs.MountImage(filepath.Join(parentLayerPaths[i], "snapshot.cim"), "layer", g2); err != nil && err != windows.ERROR_ALREADY_EXISTS {
+					return nil, errors.Wrap(err, "failed to mount cim")
+				}
+				parentLayerPathsReversed = append(parentLayerPathsReversed, fmt.Sprintf(`\\?\Volume{%s}`, g2.String()))
+			}
+			parentLayerPaths = parentLayerPathsReversed
 		}
 
 		// Append the parents

@@ -29,7 +29,7 @@ type lcowLayerEntry struct {
 const scratchPath = "scratch"
 
 // mountContainerLayers is a helper for clients to hide all the complexity of layer mounting
-// Layer folder are in order: base, [rolayer1..rolayern,] scratch
+// Layer folder are in order: layerN, .., layer1, base, scratch
 //
 // v1/v2: Argon WCOW: Returns the mount path on the host as a volume GUID.
 // v1:    Xenon WCOW: Done internally in HCS, so no point calling doing anything here.
