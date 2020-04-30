@@ -11,6 +11,7 @@ import (
 	"github.com/Microsoft/hcsshim/internal/hcs"
 	"github.com/Microsoft/hcsshim/internal/hns"
 	"github.com/Microsoft/hcsshim/internal/schema1"
+	"github.com/Microsoft/hcsshim/internal/vm"
 	"golang.org/x/sys/windows"
 )
 
@@ -39,6 +40,7 @@ type namespaceInfo struct {
 
 // UtilityVM is the object used by clients representing a utility VM
 type UtilityVM struct {
+	u               vm.UVM
 	id              string               // Identifier for the utility VM (user supplied or generated)
 	runtimeID       guid.GUID            // Hyper-V VM ID
 	owner           string               // Owner for the utility VM (user supplied or generated)

@@ -16,7 +16,7 @@ import (
 	"github.com/Microsoft/hcsshim/internal/gcs"
 	"github.com/Microsoft/hcsshim/internal/log"
 	"github.com/Microsoft/hcsshim/internal/logfields"
-	"github.com/Microsoft/hcsshim/internal/schema1"
+	// "github.com/Microsoft/hcsshim/internal/schema1"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 )
@@ -158,24 +158,28 @@ func (uvm *UtilityVM) Start(ctx context.Context) (err error) {
 		})
 	}
 
-	err = uvm.hcsSystem.Start(ctx)
+	err = uvm.u.Start(ctx)
+	// err = uvm.hcsSystem.Start(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() {
 		if err != nil {
-			uvm.hcsSystem.Terminate(ctx)
-			uvm.hcsSystem.Wait()
+			// uvm.hcsSystem.Terminate(ctx)
+			// uvm.hcsSystem.Wait()
+			uvm.u.Stop(ctx)
+			uvm.u.Wait()
 		}
 	}()
 
 	// Start waiting on the utility VM.
 	uvm.exitCh = make(chan struct{})
 	go func() {
-		err := uvm.hcsSystem.Wait()
-		if err == nil {
-			err = uvm.hcsSystem.ExitError()
-		}
+		// err := uvm.hcsSystem.Wait()
+		// if err == nil {
+		// 	err = uvm.hcsSystem.ExitError()
+		// }
+		err := uvm.u.Wait()
 		uvm.exitErr = err
 		close(uvm.exitCh)
 	}()
@@ -207,12 +211,12 @@ func (uvm *UtilityVM) Start(ctx context.Context) (err error) {
 		uvm.protocol = uvm.gc.Protocol()
 	} else {
 		// Cache the guest connection properties.
-		properties, err := uvm.hcsSystem.Properties(ctx, schema1.PropertyTypeGuestConnection)
-		if err != nil {
-			return err
-		}
-		uvm.guestCaps = properties.GuestConnectionInfo.GuestDefinedCapabilities
-		uvm.protocol = properties.GuestConnectionInfo.ProtocolVersion
+		// properties, err := uvm.hcsSystem.Properties(ctx, schema1.PropertyTypeGuestConnection)
+		// if err != nil {
+		// 	return err
+		// }
+		// uvm.guestCaps = properties.GuestConnectionInfo.GuestDefinedCapabilities
+		// uvm.protocol = properties.GuestConnectionInfo.ProtocolVersion
 	}
 	return nil
 }

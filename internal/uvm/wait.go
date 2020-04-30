@@ -7,7 +7,8 @@ import (
 
 // Wait waits synchronously for a utility VM to terminate.
 func (uvm *UtilityVM) Wait() error {
-	err := uvm.hcsSystem.Wait()
+	// err := uvm.hcsSystem.Wait()
+	err := uvm.u.Wait()
 
 	logrus.WithField(logfields.UVMID, uvm.id).Debug("uvm exited, waiting for output processing to complete")
 	if uvm.outputProcessingDone != nil {

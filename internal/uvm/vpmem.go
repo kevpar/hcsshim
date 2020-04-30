@@ -2,6 +2,7 @@ package uvm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/Microsoft/hcsshim/internal/log"
 	"github.com/Microsoft/hcsshim/internal/requesttype"
 	hcsschema "github.com/Microsoft/hcsshim/internal/schema2"
+	"github.com/Microsoft/hcsshim/internal/vm"
 	"github.com/sirupsen/logrus"
 )
 
@@ -102,9 +104,19 @@ func (uvm *UtilityVM) AddVPMEM(ctx context.Context, hostPath string) (_ string, 
 			},
 		}
 
-		if err := uvm.modify(ctx, modification); err != nil {
-			return "", fmt.Errorf("uvm::AddVPMEM: failed to modify utility VM configuration: %s", err)
+		vpmem, ok := uvm.u.(vm.VPMem)
+		if !ok {
+			return "", errors.New("VM interface does not support VPMem")
 		}
+		if err := vpmem.AddVPMemDevice(ctx, deviceNumber, hostPath, true, vm.VPMemImageFormatVHD1); err != nil {
+			return "", fmt.Errorf("failed to add VPMem device: %s", err)
+		}
+		if err := uvm.guestRequest(ctx, modification.GuestRequest); err != nil {
+			return "", fmt.Errorf("failed guest request to add VPMem device: %s", err)
+		}
+		// if err := uvm.modify(ctx, modification); err != nil {
+		// 	return "", fmt.Errorf("uvm::AddVPMEM: failed to modify utility VM configuration: %s", err)
+		// }
 
 		uvm.vpmemDevices[deviceNumber] = &vpmemInfo{
 			hostPath: hostPath,

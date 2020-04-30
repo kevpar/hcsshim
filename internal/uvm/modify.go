@@ -46,3 +46,10 @@ func (uvm *UtilityVM) modify(ctx context.Context, doc *hcsschema.ModifySettingRe
 	}
 	return nil
 }
+
+func (uvm *UtilityVM) guestRequest(ctx context.Context, request interface{}) error {
+	if err := uvm.gc.Modify(ctx, request); err != nil {
+		return fmt.Errorf("guest modify: %s", err)
+	}
+	return nil
+}

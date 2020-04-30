@@ -2,6 +2,7 @@ package uvm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -14,10 +15,9 @@ import (
 	"github.com/Microsoft/hcsshim/internal/gcs"
 	"github.com/Microsoft/hcsshim/internal/log"
 	"github.com/Microsoft/hcsshim/internal/logfields"
-	"github.com/Microsoft/hcsshim/internal/mergemaps"
 	"github.com/Microsoft/hcsshim/internal/oc"
-	hcsschema "github.com/Microsoft/hcsshim/internal/schema2"
-	"github.com/Microsoft/hcsshim/internal/schemaversion"
+	"github.com/Microsoft/hcsshim/internal/vm"
+	"github.com/Microsoft/hcsshim/internal/vm/hcs"
 	"github.com/Microsoft/hcsshim/osversion"
 	"github.com/sirupsen/logrus"
 	"go.opencensus.io/trace"
@@ -211,69 +211,102 @@ func CreateLCOW(ctx context.Context, opts *OptionsLCOW) (_ *UtilityVM, err error
 		return nil, fmt.Errorf("EnableColdDiscardHint is not supported on builds older than 18967")
 	}
 
-	doc := &hcsschema.ComputeSystem{
-		Owner:                             uvm.owner,
-		SchemaVersion:                     schemaversion.SchemaV21(),
-		ShouldTerminateOnLastHandleClosed: true,
-		VirtualMachine: &hcsschema.VirtualMachine{
-			StopOnReset: true,
-			Chipset:     &hcsschema.Chipset{},
-			ComputeTopology: &hcsschema.Topology{
-				Memory: &hcsschema.Memory2{
-					SizeInMB:              memorySizeInMB,
-					AllowOvercommit:       opts.AllowOvercommit,
-					EnableDeferredCommit:  opts.EnableDeferredCommit,
-					EnableColdDiscardHint: opts.EnableColdDiscardHint,
-					LowMMIOGapInMB:        opts.LowMMIOGapInMB,
-					HighMMIOBaseInMB:      opts.HighMMIOBaseInMB,
-					HighMMIOGapInMB:       opts.HighMMIOGapInMB,
-				},
-				Processor: &hcsschema.Processor2{
-					Count:  uvm.processorCount,
-					Limit:  opts.ProcessorLimit,
-					Weight: opts.ProcessorWeight,
-				},
-			},
-			Devices: &hcsschema.Devices{
-				HvSocket: &hcsschema.HvSocket2{
-					HvSocketConfig: &hcsschema.HvSocketSystemConfig{
-						// Allow administrators and SYSTEM to bind to vsock sockets
-						// so that we can create a GCS log socket.
-						DefaultBindSecurityDescriptor: "D:P(A;;FA;;;SY)(A;;FA;;;BA)",
-					},
-				},
-				Plan9: &hcsschema.Plan9{},
-			},
-		},
+	s := hcs.LCOWSource
+	u := s.NewLinuxUVM(opts.ID, uvm.owner)
+
+	// doc := &hcsschema.ComputeSystem{
+	// 	Owner:                             uvm.owner,
+	// 	SchemaVersion:                     schemaversion.SchemaV21(),
+	// 	ShouldTerminateOnLastHandleClosed: true,
+	// 	VirtualMachine: &hcsschema.VirtualMachine{
+	// 		StopOnReset: true,
+	// 		Chipset:     &hcsschema.Chipset{},
+	// 		ComputeTopology: &hcsschema.Topology{
+	// 			Memory: &hcsschema.Memory2{
+	// 				SizeInMB:              memorySizeInMB,
+	// 				AllowOvercommit:       opts.AllowOvercommit,
+	// 				EnableDeferredCommit:  opts.EnableDeferredCommit,
+	// 				EnableColdDiscardHint: opts.EnableColdDiscardHint,
+	// 				LowMMIOGapInMB:        opts.LowMMIOGapInMB,
+	// 				HighMMIOBaseInMB:      opts.HighMMIOBaseInMB,
+	// 				HighMMIOGapInMB:       opts.HighMMIOGapInMB,
+	// 			},
+	// 			Processor: &hcsschema.Processor2{
+	// 				Count:  uvm.processorCount,
+	// 				Limit:  opts.ProcessorLimit,
+	// 				Weight: opts.ProcessorWeight,
+	// 			},
+	// 		},
+	// 		Devices: &hcsschema.Devices{
+	// 			HvSocket: &hcsschema.HvSocket2{
+	// 				HvSocketConfig: &hcsschema.HvSocketSystemConfig{
+	// 					// Allow administrators and SYSTEM to bind to vsock sockets
+	// 					// so that we can create a GCS log socket.
+	// 					DefaultBindSecurityDescriptor: "D:P(A;;FA;;;SY)(A;;FA;;;BA)",
+	// 				},
+	// 			},
+	// 			Plan9: &hcsschema.Plan9{},
+	// 		},
+	// 	},
+	// }
+
+	memory, ok := u.(vm.MemoryControl)
+	if !ok {
+		return nil, errors.New("VM interface does not support MemoryControl")
+	}
+	if err := memory.SetMemoryLimit(ctx, uint64(memorySizeInMB)); err != nil {
+		return nil, fmt.Errorf("set memory limit failed: %s", err)
+	}
+
+	cpu, ok := u.(vm.ProcessorControl)
+	if !ok {
+		return nil, errors.New("VM interface does not support ProcessorControl")
+	}
+	if err := cpu.SetProcessorCount(ctx, uint64(uvm.processorCount)); err != nil {
+		return nil, fmt.Errorf("set processor count failed: %s", err)
 	}
 
 	// Handle StorageQoS if set
-	if opts.StorageQoSBandwidthMaximum > 0 || opts.StorageQoSIopsMaximum > 0 {
-		doc.VirtualMachine.StorageQoS = &hcsschema.StorageQoS{
-			IopsMaximum:      opts.StorageQoSIopsMaximum,
-			BandwidthMaximum: opts.StorageQoSBandwidthMaximum,
-		}
-	}
+	// if opts.StorageQoSBandwidthMaximum > 0 || opts.StorageQoSIopsMaximum > 0 {
+	// 	doc.VirtualMachine.StorageQoS = &hcsschema.StorageQoS{
+	// 		IopsMaximum:      opts.StorageQoSIopsMaximum,
+	// 		BandwidthMaximum: opts.StorageQoSBandwidthMaximum,
+	// 	}
+	// }
 
-	if opts.UseGuestConnection && !opts.ExternalGuestConnection {
-		doc.VirtualMachine.GuestConnection = &hcsschema.GuestConnection{
-			UseVsock:            true,
-			UseConnectedSuspend: true,
-		}
-	}
+	// if opts.UseGuestConnection && !opts.ExternalGuestConnection {
+	// 	doc.VirtualMachine.GuestConnection = &hcsschema.GuestConnection{
+	// 		UseVsock:            true,
+	// 		UseConnectedSuspend: true,
+	// 	}
+	// }
 
 	if uvm.scsiControllerCount > 0 {
 		// TODO: JTERRY75 - this should enumerate scsicount and add an entry per value.
-		doc.VirtualMachine.Devices.Scsi = map[string]hcsschema.Scsi{
-			"0": {
-				Attachments: make(map[string]hcsschema.Attachment),
-			},
+		scsi, ok := u.(vm.SCSI)
+		if !ok {
+			return nil, errors.New("VM interface does not support SCSI")
 		}
+		if err := scsi.AddSCSIController(ctx, 0); err != nil {
+			return nil, fmt.Errorf("add scsi controller failed: %s", err)
+		}
+		// doc.VirtualMachine.Devices.Scsi = map[string]hcsschema.Scsi{
+		// 	"0": {
+		// 		Attachments: make(map[string]hcsschema.Attachment),
+		// 	},
+		// }
 	}
 	if uvm.vpmemMaxCount > 0 {
-		doc.VirtualMachine.Devices.VirtualPMem = &hcsschema.VirtualPMemController{
-			MaximumCount:     uvm.vpmemMaxCount,
-			MaximumSizeBytes: uvm.vpmemMaxSizeBytes,
+		// doc.VirtualMachine.Devices.VirtualPMem = &hcsschema.VirtualPMemController{
+		// 	MaximumCount:     uvm.vpmemMaxCount,
+		// 	MaximumSizeBytes: uvm.vpmemMaxSizeBytes,
+		// }
+		vpmem, ok := u.(vm.VPMem)
+		if !ok {
+			return nil, errors.New("VM interface does not support VPMem")
+		}
+		if err := vpmem.AddVPMemController(ctx, uvm.vpmemMaxCount, uvm.vpmemMaxSizeBytes); err != nil {
+			return nil, fmt.Errorf("failed to add VPMem controller: %s", err)
 		}
 	}
 
@@ -286,16 +319,25 @@ func CreateLCOW(ctx context.Context, opts *OptionsLCOW) (_ *UtilityVM, err error
 	case PreferredRootFSTypeVHD:
 		// Support for VPMem VHD(X) booting rather than initrd..
 		kernelArgs = "root=/dev/pmem0 ro rootwait init=/init"
-		imageFormat := "Vhd1"
+		// imageFormat := "Vhd1"
+		imageFormat := vm.VPMemImageFormatVHD1
 		if strings.ToLower(filepath.Ext(opts.RootFSFile)) == "vhdx" {
-			imageFormat = "Vhdx"
+			// imageFormat = "Vhdx"
+			imageFormat = vm.VPMemImageFormatVHDX
 		}
-		doc.VirtualMachine.Devices.VirtualPMem.Devices = map[string]hcsschema.VirtualPMemDevice{
-			"0": {
-				HostPath:    rootfsFullPath,
-				ReadOnly:    true,
-				ImageFormat: imageFormat,
-			},
+		// doc.VirtualMachine.Devices.VirtualPMem.Devices = map[string]hcsschema.VirtualPMemDevice{
+		// 	"0": {
+		// 		HostPath:    rootfsFullPath,
+		// 		ReadOnly:    true,
+		// 		ImageFormat: imageFormat,
+		// 	},
+		// }
+		vpmem, ok := u.(vm.VPMem)
+		if !ok {
+			return nil, errors.New("VM interface does not support VPMem")
+		}
+		if err := vpmem.AddVPMemDevice(ctx, 0, rootfsFullPath, true, imageFormat); err != nil {
+			return nil, fmt.Errorf("failed to add VPMem device: %s", err)
 		}
 		// Add to our internal structure
 		uvm.vpmemDevices[0] = &vpmemInfo{
@@ -309,11 +351,11 @@ func CreateLCOW(ctx context.Context, opts *OptionsLCOW) (_ *UtilityVM, err error
 	if opts.ConsolePipe != "" {
 		vmDebugging = true
 		kernelArgs += " 8250_core.nr_uarts=1 8250_core.skip_txen_test=1 console=ttyS0,115200"
-		doc.VirtualMachine.Devices.ComPorts = map[string]hcsschema.ComPort{
-			"0": { // Which is actually COM1
-				NamedPipe: opts.ConsolePipe,
-			},
-		}
+		// doc.VirtualMachine.Devices.ComPorts = map[string]hcsschema.ComPort{
+		// 	"0": { // Which is actually COM1
+		// 		NamedPipe: opts.ConsolePipe,
+		// 	},
+		// }
 	} else {
 		kernelArgs += " 8250_core.nr_uarts=0"
 	}
@@ -321,9 +363,9 @@ func CreateLCOW(ctx context.Context, opts *OptionsLCOW) (_ *UtilityVM, err error
 	if opts.EnableGraphicsConsole {
 		vmDebugging = true
 		kernelArgs += " console=tty"
-		doc.VirtualMachine.Devices.Keyboard = &hcsschema.Keyboard{}
-		doc.VirtualMachine.Devices.EnhancedModeVideo = &hcsschema.EnhancedModeVideo{}
-		doc.VirtualMachine.Devices.VideoMonitor = &hcsschema.VideoMonitor{}
+		// doc.VirtualMachine.Devices.Keyboard = &hcsschema.Keyboard{}
+		// doc.VirtualMachine.Devices.EnhancedModeVideo = &hcsschema.EnhancedModeVideo{}
+		// doc.VirtualMachine.Devices.VideoMonitor = &hcsschema.VideoMonitor{}
 	}
 
 	if !vmDebugging {
@@ -364,37 +406,60 @@ func CreateLCOW(ctx context.Context, opts *OptionsLCOW) (_ *UtilityVM, err error
 	kernelArgs += fmt.Sprintf(" nr_cpus=%d", opts.ProcessorCount)
 	kernelArgs += ` brd.rd_nr=0 pmtmr=0 -- ` + initArgs
 
-	if !opts.KernelDirect {
-		doc.VirtualMachine.Chipset.Uefi = &hcsschema.Uefi{
-			BootThis: &hcsschema.UefiBootEntry{
-				DevicePath:    `\` + opts.KernelFile,
-				DeviceType:    "VmbFs",
-				VmbFsRootPath: opts.BootFilesPath,
-				OptionalData:  kernelArgs,
-			},
+	linuxBoot, ok := u.(vm.LinuxBootConfig)
+	if !ok {
+		return nil, errors.New("VM interface does not support LinuxBootConfig")
+	}
+	if opts.KernelDirect {
+		var initFS string
+		if opts.PreferredRootFSType == PreferredRootFSTypeInitRd {
+			initFS = rootfsFullPath
+		}
+		if err := linuxBoot.SetLinuxKernelDirectBoot(ctx, kernelFullPath, initFS, kernelArgs); err != nil {
+			return nil, fmt.Errorf("failed to set Linux kernel direct boot: %s", err)
 		}
 	} else {
-		doc.VirtualMachine.Chipset.LinuxKernelDirect = &hcsschema.LinuxKernelDirect{
-			KernelFilePath: kernelFullPath,
-			KernelCmdLine:  kernelArgs,
-		}
-		if opts.PreferredRootFSType == PreferredRootFSTypeInitRd {
-			doc.VirtualMachine.Chipset.LinuxKernelDirect.InitRdPath = rootfsFullPath
+		if err := linuxBoot.SetLinuxUEFIBoot(ctx, opts.BootFilesPath, opts.KernelFile, kernelArgs); err != nil {
+			return nil, fmt.Errorf("failed to set Linux kernel UEFI boot: %s", err)
 		}
 	}
 
-	fullDoc, err := mergemaps.MergeJSON(doc, ([]byte)(opts.AdditionHCSDocumentJSON))
-	if err != nil {
-		return nil, fmt.Errorf("failed to merge additional JSON '%s': %s", opts.AdditionHCSDocumentJSON, err)
-	}
+	// if !opts.KernelDirect {
+	// 	doc.VirtualMachine.Chipset.Uefi = &hcsschema.Uefi{
+	// 		BootThis: &hcsschema.UefiBootEntry{
+	// 			DevicePath:    `\` + opts.KernelFile,
+	// 			DeviceType:    "VmbFs",
+	// 			VmbFsRootPath: opts.BootFilesPath,
+	// 			OptionalData:  kernelArgs,
+	// 		},
+	// 	}
+	// } else {
+	// 	doc.VirtualMachine.Chipset.LinuxKernelDirect = &hcsschema.LinuxKernelDirect{
+	// 		KernelFilePath: kernelFullPath,
+	// 		KernelCmdLine:  kernelArgs,
+	// 	}
+	// 	if opts.PreferredRootFSType == PreferredRootFSTypeInitRd {
+	// 		doc.VirtualMachine.Chipset.LinuxKernelDirect.InitRdPath = rootfsFullPath
+	// 	}
+	// }
 
-	err = uvm.create(ctx, fullDoc)
-	if err != nil {
-		return nil, err
+	// fullDoc, err := mergemaps.MergeJSON(doc, ([]byte)(opts.AdditionHCSDocumentJSON))
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed to merge additional JSON '%s': %s", opts.AdditionHCSDocumentJSON, err)
+	// }
+
+	if err := u.Create(ctx); err != nil {
+		return nil, fmt.Errorf("VM failed to create: %s", err)
 	}
+	uvm.u = u
+
+	// err = uvm.create(ctx, u)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	// Cerate a socket to inject entropy during boot.
-	uvm.entropyListener, err = uvm.listenVsock(entropyVsockPort)
+	uvm.entropyListener, err = uvm.listenVsock(ctx, entropyVsockPort)
 	if err != nil {
 		return nil, err
 	}
@@ -404,14 +469,14 @@ func CreateLCOW(ctx context.Context, opts *OptionsLCOW) (_ *UtilityVM, err error
 	if opts.ForwardStdout || opts.ForwardStderr {
 		uvm.outputHandler = opts.OutputHandler
 		uvm.outputProcessingDone = make(chan struct{})
-		uvm.outputListener, err = uvm.listenVsock(linuxLogVsockPort)
+		uvm.outputListener, err = uvm.listenVsock(ctx, linuxLogVsockPort)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	if opts.UseGuestConnection && opts.ExternalGuestConnection {
-		l, err := uvm.listenVsock(gcs.LinuxGcsVsockPort)
+		l, err := uvm.listenVsock(ctx, gcs.LinuxGcsVsockPort)
 		if err != nil {
 			return nil, err
 		}
@@ -421,9 +486,14 @@ func CreateLCOW(ctx context.Context, opts *OptionsLCOW) (_ *UtilityVM, err error
 	return uvm, nil
 }
 
-func (uvm *UtilityVM) listenVsock(port uint32) (net.Listener, error) {
-	return winio.ListenHvsock(&winio.HvsockAddr{
-		VMID:      uvm.runtimeID,
-		ServiceID: winio.VsockServiceID(port),
-	})
+func (uvm *UtilityVM) listenVsock(ctx context.Context, port uint32) (net.Listener, error) {
+	// return winio.ListenHvsock(&winio.HvsockAddr{
+	// 	VMID:      uvm.runtimeID,
+	// 	ServiceID: winio.VsockServiceID(port),
+	// })
+	hvsock, ok := uvm.u.(vm.HVSocketListen)
+	if !ok {
+		return nil, errors.New("VM interface does not support HVSocketListen")
+	}
+	return hvsock.HVSocketListen(ctx, winio.VsockServiceID(port))
 }
