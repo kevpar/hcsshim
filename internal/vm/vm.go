@@ -33,6 +33,29 @@ type MemoryControl interface {
 	SetMemoryLimit(ctx context.Context, memoryMB uint64) error
 }
 
+type MemoryConfigControl interface {
+	SetMemoryConfig(ctx context.Context, config *MemoryConfig) error
+}
+
+type MemoryConfig struct {
+	BackingType     MemoryBackingType
+	DeferredCommit  bool
+	HotHint         bool
+	ColdHint        bool
+	ColdDiscardHint bool
+}
+
+type MemoryBackingType uint8
+
+const (
+	MemoryBackingTypeVirtual MemoryBackingType = iota
+	MemoryBackingTypePhysical
+)
+
+type MMIOConfigControl interface {
+	SetMMIOConfig(ctx context.Context, lowGapMB uint64, highBaseMB uint64, highGapMB uint64) error
+}
+
 type ProcessorControl interface {
 	SetProcessorCount(ctx context.Context, count uint64) error
 }

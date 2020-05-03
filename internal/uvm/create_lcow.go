@@ -258,6 +258,30 @@ func CreateLCOW(ctx context.Context, opts *OptionsLCOW) (_ *UtilityVM, err error
 		return nil, fmt.Errorf("set memory limit failed: %s", err)
 	}
 
+	memoryConfigControl := u.(vm.MemoryConfigControl)
+	if !ok {
+		return nil, errors.New("VM interface does not support MemoryConfigControl")
+	}
+	backingType := vm.MemoryBackingTypeVirtual
+	if !opts.AllowOvercommit {
+		backingType = vm.MemoryBackingTypePhysical
+	}
+	if err := memoryConfigControl.SetMemoryConfig(ctx, &vm.MemoryConfig{
+		BackingType:     backingType,
+		DeferredCommit:  opts.EnableDeferredCommit,
+		ColdDiscardHint: opts.EnableColdDiscardHint,
+	}); err != nil {
+		return nil, fmt.Errorf("set memory config failed: %s", err)
+	}
+
+	mmio, ok := u.(vm.MMIOConfigControl)
+	if !ok {
+		return nil, errors.New("VM interface does not support MMIOConfigControl")
+	}
+	if err := mmio.SetMMIOConfig(ctx, opts.LowMMIOGapInMB, opts.HighMMIOBaseInMB, opts.HighMMIOGapInMB); err != nil {
+		return nil, fmt.Errorf("set MMIO config failed: %s", err)
+	}
+
 	cpu, ok := u.(vm.ProcessorControl)
 	if !ok {
 		return nil, errors.New("VM interface does not support ProcessorControl")
