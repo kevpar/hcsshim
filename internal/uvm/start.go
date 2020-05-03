@@ -199,9 +199,11 @@ func (uvm *UtilityVM) Start(ctx context.Context) (err error) {
 		}
 		// Start the GCS protocol.
 		gcc := &gcs.GuestConnectionConfig{
-			Conn:     conn,
-			Log:      log.G(ctx).WithField(logfields.UVMID, uvm.id),
-			IoListen: gcs.HvsockIoListen(uvm.runtimeID),
+			Conn: conn,
+			Log:  log.G(ctx).WithField(logfields.UVMID, uvm.id),
+			IoListen: func(port uint32) (net.Listener, error) {
+				return uvm.listenVsock(context.Background(), port)
+			},
 		}
 		uvm.gc, err = gcc.Connect(ctx)
 		if err != nil {
