@@ -69,3 +69,7 @@ type LinuxBootConfig interface {
 type HVSocketListen interface {
 	HVSocketListen(ctx context.Context, serviceID guid.GUID) (net.Listener, error)
 }
+
+type Network interface {
+	AddNIC(ctx context.Context, nicID guid.GUID, endpointID string, mac string) error
+}

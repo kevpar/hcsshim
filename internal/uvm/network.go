@@ -13,6 +13,7 @@ import (
 	"github.com/Microsoft/hcsshim/internal/log"
 	"github.com/Microsoft/hcsshim/internal/requesttype"
 	hcsschema "github.com/Microsoft/hcsshim/internal/schema2"
+	"github.com/Microsoft/hcsshim/internal/vm"
 	"github.com/Microsoft/hcsshim/osversion"
 	"github.com/sirupsen/logrus"
 )
@@ -270,7 +271,14 @@ func (uvm *UtilityVM) addNIC(ctx context.Context, id guid.GUID, endpoint *hns.HN
 		}
 	}
 
-	if err := uvm.modify(ctx, &request); err != nil {
+	network, ok := uvm.u.(vm.Network)
+	if !ok {
+		return errors.New("VM interface does not support Network")
+	}
+	if err := network.AddNIC(ctx, id, endpoint.Id, endpoint.MacAddress); err != nil {
+		return fmt.Errorf("failed to add NIC to VM: %s", err)
+	}
+	if err := uvm.guestRequest(ctx, request.GuestRequest); err != nil {
 		return err
 	}
 

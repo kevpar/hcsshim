@@ -321,3 +321,18 @@ func (uvm *utilityVM) HVSocketListen(ctx context.Context, serviceID guid.GUID) (
 	}
 	return l, nil
 }
+
+func (uvm *utilityVM) AddNIC(ctx context.Context, nicID guid.GUID, endpointID string, mac string) error {
+	request := hcsschema.ModifySettingRequest{
+		RequestType:  requesttype.Add,
+		ResourcePath: fmt.Sprintf("VirtualMachine/Devices/NetworkAdapters/%s", nicID.String()),
+		Settings: hcsschema.NetworkAdapter{
+			EndpointId: endpointID,
+			MacAddress: mac,
+		},
+	}
+	if err := uvm.cs.Modify(ctx, request); err != nil {
+		return err
+	}
+	return nil
+}
