@@ -281,16 +281,16 @@ func getVPMemImageFormatString(imageFormat vm.VPMemImageFormat) (string, error) 
 	}
 }
 
-func (uvm *utilityVM) SetLinuxUEFIBoot(ctx context.Context, dir string, kernel string, cmd string) error {
+func (uvm *utilityVM) SetUEFIBoot(ctx context.Context, dir string, path string, args string) error {
 	if uvm.state != vm.StatePreCreated {
 		return errNotInPreCreatedState
 	}
 	uvm.doc.VirtualMachine.Chipset.Uefi = &hcsschema.Uefi{
 		BootThis: &hcsschema.UefiBootEntry{
-			DevicePath:    `\` + kernel,
+			DevicePath:    path,
 			DeviceType:    "VmbFs",
 			VmbFsRootPath: dir,
-			OptionalData:  cmd,
+			OptionalData:  args,
 		},
 	}
 	return nil

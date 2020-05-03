@@ -61,8 +61,11 @@ const (
 	VPMemImageFormatVHDX
 )
 
-type LinuxBootConfig interface {
-	SetLinuxUEFIBoot(ctx context.Context, dir string, kernel string, cmd string) error
+type UEFIBoot interface {
+	SetUEFIBoot(ctx context.Context, dir string, path string, args string) error
+}
+
+type LinuxBoot interface {
 	SetLinuxKernelDirectBoot(ctx context.Context, kernel string, initRD string, cmd string) error
 }
 

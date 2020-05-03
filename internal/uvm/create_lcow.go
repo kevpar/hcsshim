@@ -406,21 +406,25 @@ func CreateLCOW(ctx context.Context, opts *OptionsLCOW) (_ *UtilityVM, err error
 	kernelArgs += fmt.Sprintf(" nr_cpus=%d", opts.ProcessorCount)
 	kernelArgs += ` brd.rd_nr=0 pmtmr=0 -- ` + initArgs
 
-	linuxBoot, ok := u.(vm.LinuxBootConfig)
-	if !ok {
-		return nil, errors.New("VM interface does not support LinuxBootConfig")
-	}
 	if opts.KernelDirect {
 		var initFS string
 		if opts.PreferredRootFSType == PreferredRootFSTypeInitRd {
 			initFS = rootfsFullPath
 		}
+		linuxBoot, ok := u.(vm.LinuxBoot)
+		if !ok {
+			return nil, errors.New("VM interface does not support LinuxBoot")
+		}
 		if err := linuxBoot.SetLinuxKernelDirectBoot(ctx, kernelFullPath, initFS, kernelArgs); err != nil {
 			return nil, fmt.Errorf("failed to set Linux kernel direct boot: %s", err)
 		}
 	} else {
-		if err := linuxBoot.SetLinuxUEFIBoot(ctx, opts.BootFilesPath, opts.KernelFile, kernelArgs); err != nil {
-			return nil, fmt.Errorf("failed to set Linux kernel UEFI boot: %s", err)
+		uefiBoot, ok := u.(vm.UEFIBoot)
+		if !ok {
+			return nil, errors.New("VM interface does not support UEFIBoot")
+		}
+		if err := uefiBoot.SetUEFIBoot(ctx, opts.BootFilesPath, opts.KernelFile, kernelArgs); err != nil {
+			return nil, fmt.Errorf("failed to set UEFI boot: %s", err)
 		}
 	}
 
