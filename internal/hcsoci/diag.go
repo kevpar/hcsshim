@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/Microsoft/hcsshim/internal/cmd"
 	"github.com/Microsoft/hcsshim/internal/log"
 	"github.com/Microsoft/hcsshim/internal/logfields"
 	"github.com/Microsoft/hcsshim/internal/shimdiag"
@@ -14,12 +15,12 @@ func ExecInUvm(ctx context.Context, vm *uvm.UtilityVM, req *shimdiag.ExecProcess
 	if len(req.Args) == 0 {
 		return 0, errors.New("missing command")
 	}
-	np, err := NewNpipeIO(ctx, req.Stdin, req.Stdout, req.Stderr, req.Terminal)
+	np, err := cmd.NewNpipeIO(ctx, req.Stdin, req.Stdout, req.Stderr, req.Terminal)
 	if err != nil {
 		return 0, err
 	}
 	defer np.Close(ctx)
-	cmd := CommandContext(ctx, vm, req.Args[0], req.Args[1:]...)
+	cmd := cmd.CommandContext(ctx, vm, req.Args[0], req.Args[1:]...)
 	if req.Workdir != "" {
 		cmd.Spec.Cwd = req.Workdir
 	}
