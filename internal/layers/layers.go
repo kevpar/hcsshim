@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"time"
 
@@ -95,11 +96,10 @@ func MountLCOWLayers(ctx context.Context, containerID string, layerFolders []str
 
 	for _, layerPath := range layerFolders[:len(layerFolders)-1] {
 		log.G(ctx).WithField("layerPath", layerPath).Debug("mounting layer")
-		var (
+		if e := path.Ext(layerPath); e != ".vhd" && e != ".vhdx" {
 			layerPath = filepath.Join(layerPath, "layer.vhd")
-			uvmPath   string
-		)
-		uvmPath, err = addLCOWLayer(ctx, vm, layerPath)
+		}
+		uvmPath, err := addLCOWLayer(ctx, vm, layerPath)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to add LCOW layer: %s", err)
 		}
@@ -476,8 +476,10 @@ func UnmountContainerLayers(ctx context.Context, layerFolders []string, containe
 	// share layers. Note that SCSI is used on large layers.
 	if vm.OS() == "linux" && (op&UnmountOperationVPMEM) == UnmountOperationVPMEM {
 		for _, layerPath := range layerFolders[:len(layerFolders)-1] {
-			hostPath := filepath.Join(layerPath, "layer.vhd")
-			if err := removeLCOWLayer(ctx, vm, hostPath); err != nil {
+			if e := path.Ext(layerPath); e != ".vhd" && e != ".vhdx" {
+				layerPath = filepath.Join(layerPath, "layer.vhd")
+			}
+			if err := removeLCOWLayer(ctx, vm, layerPath); err != nil {
 				log.G(ctx).WithError(err).Warn("remove layer failed")
 				if retError == nil {
 					retError = err
@@ -515,7 +517,10 @@ func containerRootfsPath(vm *uvm.UtilityVM, rootPath string) string {
 }
 
 func getScratchVHDPath(layerFolders []string) (string, error) {
-	hostPath := filepath.Join(layerFolders[len(layerFolders)-1], "sandbox.vhdx")
+	hostPath := layerFolders[len(layerFolders)-1]
+	if e := path.Ext(hostPath); e != ".vhd" && e != ".vhdx" {
+		hostPath = filepath.Join(hostPath, "sandbox.vhdx")
+	}
 	// For LCOW, we can reuse another container's scratch space (usually the sandbox container's).
 	//
 	// When sharing a scratch space, the `hostPath` will be a symlink to the sandbox.vhdx location to use.
