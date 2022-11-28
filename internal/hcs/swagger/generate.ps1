@@ -1,0 +1,2 @@
+java -jar swagger-codegen-cli-2.jar generate -i 'HCS_Schema[Windows_11_SDK_version_21H2].json' -l go -o ../../src/hcsshim/internal/hcs/schema2 -Dmodels -DmodelDocs=false -DmodelTests=false -t template --additional-properties packageName=hcsschema2
+ls ../schema2 | %{$new=$_.name.replace('model_','');mv -force $_ ../schema2/$new}
