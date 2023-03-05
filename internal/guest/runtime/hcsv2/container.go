@@ -7,6 +7,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -72,6 +74,29 @@ type Container struct {
 
 func (c *Container) Start(ctx context.Context, conSettings stdio.ConnectionSettings) (int, error) {
 	log.G(ctx).WithField(logfields.ContainerID, c.id).Info("opengcs::Container::Start")
+
+	// Set sysctls based on annotations that have been set.
+	// In the future we may want to scope this so only certain containers get checked
+	// for sysctl annotations, or make it a part of initial UVM setup. But for now this
+	// approach works and is easier to implement.
+	for name, value := range c.spec.Annotations {
+		prefix := "io.microsoft.container.sysctl."
+		if strings.HasPrefix(name, prefix) {
+			sysctl := strings.TrimPrefix(name, prefix)
+			log.G(ctx).WithFields(logrus.Fields{
+				"name":  sysctl,
+				"value": value,
+			}).Info("setting sysctl")
+			arg := fmt.Sprintf("%s=%s", sysctl, value)
+			// TODO: Should we just write to /proc/sys/{strings.ReplaceAll(sysctl, ".", "/")} instead of invoking a binary?
+			cmd := exec.Command("sysctl", arg)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				return -1, fmt.Errorf("failed to set sysctl %s: %w: %s", arg, err, string(out))
+			}
+		}
+	}
+
 	stdioSet, err := stdio.Connect(c.vsock, conSettings)
 	if err != nil {
 		return -1, err
