@@ -71,6 +71,8 @@ type createOptionsInternal struct {
 	ccgState               *hcsschema.ContainerCredentialGuardState // Container Credential Guard information to be attached to HCS container document
 	isTemplate             bool                                     // Are we going to save this container as a template
 	templateID             string                                   // Template ID of the template from which this container is being cloned
+
+	windowsAdditionalMounts []hcsschema.MappedDirectory // Holds additional mounts based on added devices (such as SCSI). Only used for Windows v2 schema containers.
 }
 
 // compares two slices of strings and returns true if they are same, returns false otherwise.
@@ -280,7 +282,7 @@ func CreateContainer(ctx context.Context, createOptions *CreateOptions) (_ cow.C
 		return nil, nil, fmt.Errorf("container config validation failed: %s", err)
 	}
 
-	r := resources.NewContainerResources(createOptions.ID)
+	r := resources.NewContainerResources(coi.ID)
 	defer func() {
 		if err != nil {
 			if !coi.DoNotReleaseResourcesOnFailure {
@@ -291,7 +293,7 @@ func CreateContainer(ctx context.Context, createOptions *CreateOptions) (_ cow.C
 
 	if coi.HostingSystem != nil {
 		if coi.Spec.Linux != nil {
-			r.SetContainerRootInUVM(fmt.Sprintf(lcowRootInUVM, createOptions.ID))
+			r.SetContainerRootInUVM(fmt.Sprintf(lcowRootInUVM, coi.ID))
 		} else {
 			n := coi.HostingSystem.ContainerCounter()
 			r.SetContainerRootInUVM(fmt.Sprintf(wcowRootInUVM, strconv.FormatUint(n, 16)))
