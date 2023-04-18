@@ -79,6 +79,7 @@ type LCOWMappedVirtualDisk struct {
 	MountPath  string            `json:"MountPath,omitempty"`
 	Lun        uint8             `json:"Lun,omitempty"`
 	Controller uint8             `json:"Controller,omitempty"`
+	Partition  uint32            `json:"Partition,omitempty"`
 	ReadOnly   bool              `json:"ReadOnly,omitempty"`
 	Encrypted  bool              `json:"Encrypted,omitempty"`
 	Options    []string          `json:"Options,omitempty"`

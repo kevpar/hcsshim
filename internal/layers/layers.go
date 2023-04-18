@@ -28,6 +28,7 @@ import (
 
 type LCOWLayer struct {
 	VHDPath   string
+	Partition uint
 }
 
 // Defines a set of LCOW layers.

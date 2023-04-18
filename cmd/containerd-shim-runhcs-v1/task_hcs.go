@@ -4,9 +4,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -146,6 +148,25 @@ func getLCOWLayers(rootfs []*types.Mount, layerFolders []string) (*layers.LCOWLa
 			Layers:         roLayers,
 			ScratchVHDPath: filepath.Join(scratchLayer, "sandbox.vhdx"),
 		}, nil
+	case "lcow-partition-layer":
+		var layerData []struct {
+			Path      string
+			Partition uint
+		}
+		for _, opt := range m.Options {
+			const optPrefix = "layers="
+			if strings.HasPrefix(opt, optPrefix) {
+				layerJSON := strings.TrimPrefix(opt, optPrefix)
+				if err := json.Unmarshal([]byte(layerJSON), &layerData); err != nil {
+					return nil, err
+				}
+			}
+		}
+		roLayers := make([]*layers.LCOWLayer, 0, len(layerData)-1)
+		for _, layer := range layerData {
+			roLayers = append(roLayers, &layers.LCOWLayer{VHDPath: layer.Path, Partition: layer.Partition})
+		}
+		return &layers.LCOWLayers{Layers: roLayers, ScratchVHDPath: layerData[len(layerData)-1].Path}, nil
 	default:
 		return nil, fmt.Errorf("unrecognized rootfs mount type: %s", m.Type)
 	}

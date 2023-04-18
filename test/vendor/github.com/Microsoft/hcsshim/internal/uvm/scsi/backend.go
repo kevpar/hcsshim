@@ -89,6 +89,7 @@ func (bm *bridgeMounter) mount(ctx context.Context, controller, lun uint, path s
 			MountPath:  path,
 			Controller: uint8(controller),
 			Lun:        uint8(lun),
+			Partition:  uint32(config.partition),
 			ReadOnly:   config.readOnly,
 			Encrypted:  config.encrypted,
 			Options:    config.options,

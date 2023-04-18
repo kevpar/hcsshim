@@ -35,6 +35,7 @@ type mount struct {
 }
 
 type mountConfig struct {
+	partition uint
 	readOnly  bool
 	encrypted bool
 	verity    *guestresource.DeviceVerityInfo

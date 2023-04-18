@@ -48,6 +48,7 @@ func NewManager(
 }
 
 type MountConfig struct {
+	Partition uint
 	Encrypted bool
 	Options   []string
 }
