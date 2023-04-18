@@ -11,6 +11,7 @@ import (
 	"time"
 
 	eventstypes "github.com/containerd/containerd/api/events"
+	"github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/runtime"
 	"github.com/containerd/containerd/runtime/v2/task"
@@ -30,6 +31,7 @@ import (
 	hcsschema "github.com/Microsoft/hcsshim/internal/hcs/schema2"
 	"github.com/Microsoft/hcsshim/internal/hcsoci"
 	"github.com/Microsoft/hcsshim/internal/jobcontainers"
+	"github.com/Microsoft/hcsshim/internal/layers"
 	"github.com/Microsoft/hcsshim/internal/log"
 	"github.com/Microsoft/hcsshim/internal/memory"
 	"github.com/Microsoft/hcsshim/internal/oc"
@@ -116,9 +118,51 @@ func newHcsStandaloneTask(ctx context.Context, events publisher, req *task.Creat
 	return shim, nil
 }
 
+func getLCOWLayers(rootfs []*types.Mount, layerFolders []string) (*layers.LCOWLayers, error) {
+	// Due to previous validation, we know that for a Linux container we either have LayerFolders, or
+	// a single rootfs mount.
+	if len(layerFolders) > 0 {
+		roLayers := make([]*layers.LCOWLayer, 0, len(layerFolders)-1)
+		for _, parentLayer := range layerFolders[:len(layerFolders)-1] {
+			roLayers = append(roLayers, &layers.LCOWLayer{VHDPath: filepath.Join(parentLayer, "layer.vhd")})
+		}
+		return &layers.LCOWLayers{
+			Layers:         roLayers,
+			ScratchVHDPath: filepath.Join(layerFolders[len(layerFolders)-1], "sandbox.vhdx"),
+		}, nil
+	}
+	m := rootfs[0]
+	switch m.Type {
+	case "lcow-layer":
+		scratchLayer, parentLayers, err := parseLegacyRootfsMount(rootfs[0])
+		if err != nil {
+			return nil, err
+		}
+		roLayers := make([]*layers.LCOWLayer, 0, len(parentLayers))
+		for _, parentLayer := range parentLayers {
+			roLayers = append(roLayers, &layers.LCOWLayer{VHDPath: filepath.Join(parentLayer, "layer.vhd")})
+		}
+		return &layers.LCOWLayers{
+			Layers:         roLayers,
+			ScratchVHDPath: filepath.Join(scratchLayer, "sandbox.vhdx"),
+		}, nil
+	default:
+		return nil, fmt.Errorf("unrecognized rootfs mount type: %s", m.Type)
+	}
+}
+
 // createContainer is a generic call to return either a process/hypervisor isolated container, or a job container
 // based on what is set in the OCI spec.
-func createContainer(ctx context.Context, id, owner, netNS string, s *specs.Spec, parent *uvm.UtilityVM, shimOpts *runhcsopts.Options) (cow.Container, *resources.Resources, error) {
+func createContainer(
+	ctx context.Context,
+	id,
+	owner,
+	netNS string,
+	s *specs.Spec,
+	parent *uvm.UtilityVM,
+	shimOpts *runhcsopts.Options,
+	rootfs []*types.Mount,
+) (cow.Container, *resources.Resources, error) {
 	var (
 		err       error
 		container cow.Container
@@ -137,6 +181,17 @@ func createContainer(ctx context.Context, id, owner, netNS string, s *specs.Spec
 			Spec:             s,
 			HostingSystem:    parent,
 			NetworkNamespace: netNS,
+		}
+		if s.Linux != nil {
+			var layerFolders []string
+			if s.Windows != nil {
+				layerFolders = s.Windows.LayerFolders
+			}
+			lcowLayers, err := getLCOWLayers(rootfs, layerFolders)
+			if err != nil {
+				return nil, nil, err
+			}
+			opts.LCOWLayers = lcowLayers
 		}
 		if shimOpts != nil {
 			opts.ScaleCPULimitsToSandbox = shimOpts.ScaleCpuLimitsToSandbox
@@ -193,7 +248,7 @@ func newHcsTask(
 		return nil, err
 	}
 
-	container, resources, err := createContainer(ctx, req.ID, owner, netNS, s, parent, shimOpts)
+	container, resources, err := createContainer(ctx, req.ID, owner, netNS, s, parent, shimOpts, req.Rootfs)
 	if err != nil {
 		return nil, err
 	}
