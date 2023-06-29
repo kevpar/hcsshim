@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/vishvananda/netns"
 	"go.opencensus.io/trace"
 
 	"github.com/Microsoft/hcsshim/internal/guest/gcserr"
@@ -264,24 +263,27 @@ func (nin *nicInNamespace) assignToPid(ctx context.Context, pid int) (err error)
 		EncapOverhead:        nin.adapter.EncapOverhead,
 	}
 
-	if err := network.MoveInterfaceToNS(nin.ifname, pid); err != nil {
-		return errors.Wrapf(err, "failed to move interface %s to network namespace", nin.ifname)
-	}
+	// if err := network.MoveInterfaceToNS(nin.ifname, pid); err != nil {
+	// 	return errors.Wrapf(err, "failed to move interface %s to network namespace", nin.ifname)
+	// }
 
 	// Get a reference to the new network namespace
-	ns, err := netns.GetFromPid(pid)
-	if err != nil {
-		return errors.Wrapf(err, "netns.GetFromPid(%d) failed", pid)
-	}
-	defer ns.Close()
+	// ns, err := netns.GetFromPid(pid)
+	// if err != nil {
+	// 	return errors.Wrapf(err, "netns.GetFromPid(%d) failed", pid)
+	// }
+	// defer ns.Close()
 
 	netNSCfg := func() error {
 		return network.NetNSConfig(ctx, nin.ifname, pid, v1Adapter)
 	}
 
-	if err := network.DoInNetNS(ns, netNSCfg); err != nil {
-		return errors.Wrapf(err, "failed to configure adapter aid: %s, if id: %s", nin.adapter.ID, nin.ifname)
+	if err := netNSCfg(); err != nil {
+		return fmt.Errorf("configure net interface %s with ID %s: %w", nin.ifname, nin.adapter.ID, err)
 	}
+	// if err := network.DoInNetNS(ns, netNSCfg); err != nil {
+	// 	return errors.Wrapf(err, "failed to configure adapter aid: %s, if id: %s", nin.adapter.ID, nin.ifname)
+	// }
 	nin.assignedPid = pid
 	return nil
 }
