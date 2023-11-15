@@ -300,6 +300,7 @@ func (uvm *UtilityVM) Start(ctx context.Context) (err error) {
 	}
 
 	// Initialize the SCSIManager.
+	hb := scsi.NewHCSHostBackend(uvm.hcsSystem)
 	var gb scsi.GuestBackend
 	if uvm.gc != nil {
 		gb = scsi.NewBridgeGuestBackend(uvm.gc, uvm.OS())
@@ -310,17 +311,27 @@ func (uvm *UtilityVM) Start(ctx context.Context) (err error) {
 	if uvm.OS() == "linux" {
 		guestMountFmt = "/run/mounts/scsi/m%d"
 	}
-	mgr, err := scsi.NewManager(
-		scsi.NewHCSHostBackend(uvm.hcsSystem),
-		gb,
-		int(uvm.scsiControllerCount),
-		64, // LUNs per controller, fixed by Hyper-V.
-		guestMountFmt,
-		uvm.reservedSCSISlots)
-	if err != nil {
-		return fmt.Errorf("creating scsi manager: %w", err)
+	if uvm.SCSIRestorer != nil {
+		uvm.SCSIManager = uvm.SCSIRestorer.Restore(
+			ctx,
+			hb,
+			gb,
+			int(uvm.scsiControllerCount),
+			64, // LUNs per controller, fixed by Hyper-V.
+		)
+	} else {
+		mgr, err := scsi.NewManager(
+			hb,
+			gb,
+			int(uvm.scsiControllerCount),
+			64, // LUNs per controller, fixed by Hyper-V.
+			guestMountFmt,
+			uvm.reservedSCSISlots)
+		if err != nil {
+			return fmt.Errorf("creating scsi manager: %w", err)
+		}
+		uvm.SCSIManager = mgr
 	}
-	uvm.SCSIManager = mgr
 
 	if uvm.confidentialUVMOptions != nil && uvm.OS() == "linux" {
 		copts := []ConfidentialUVMOpt{

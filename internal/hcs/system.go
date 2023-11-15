@@ -37,6 +37,8 @@ type System struct {
 	exitError      error
 	os, typ, owner string
 	startTime      time.Time
+
+	ModifyHook func(any) error
 }
 
 var _ cow.Container = &System{}
@@ -849,6 +851,12 @@ func (computeSystem *System) unregisterCallback(ctx context.Context) error {
 func (computeSystem *System) Modify(ctx context.Context, config interface{}) error {
 	computeSystem.handleLock.RLock()
 	defer computeSystem.handleLock.RUnlock()
+
+	if mh := computeSystem.ModifyHook; mh != nil {
+		if err := mh(config); err != nil {
+			return err
+		}
+	}
 
 	operation := "hcs::System::Modify"
 

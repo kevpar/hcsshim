@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
+	statepkg "github.com/Microsoft/hcsshim/internal/state"
 	"github.com/Microsoft/hcsshim/internal/wclayer"
 )
 
@@ -307,4 +310,146 @@ func parseExtensibleVirtualDiskPath(hostPath string) (evdType, mountPath string,
 		return "", "", fmt.Errorf("invalid extensible vhd path: %s", hostPath)
 	}
 	return trimmedPath[:separatorIndex], trimmedPath[separatorIndex+1:], nil
+}
+
+type scsiStateAttachmentConfig struct {
+	Path     string
+	ReadOnly bool
+	Type     string
+}
+
+type scsiStateAttachment struct {
+	Controller uint
+	LUN        uint
+	Config     *scsiStateAttachmentConfig
+	RefCount   uint
+}
+
+type scsiStateMountConfig struct {
+	ReadOnly bool
+	Options  []string
+}
+
+type scsiStateMount struct {
+	Controller uint
+	LUN        uint
+	Path       string
+	Config     scsiStateMountConfig
+	RefCount   uint
+}
+
+type scsiState struct {
+	Attachments []scsiStateAttachment
+	Mounts      []scsiStateMount
+	MountFmt    string
+}
+
+func (m *Manager) Save(ctx context.Context, path string) error {
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return err
+	}
+	state := scsiState{}
+	for i := range m.attachManager.slots {
+		for j := range m.attachManager.slots[i] {
+			s := m.attachManager.slots[i][j]
+			if s != nil && s.refCount > 0 {
+				a := scsiStateAttachment{
+					Controller: s.controller,
+					LUN:        s.lun,
+					RefCount:   s.refCount,
+				}
+				if s.config != nil {
+					a.Config = &scsiStateAttachmentConfig{
+						Path:     s.config.path,
+						ReadOnly: s.config.readOnly,
+						Type:     s.config.typ,
+					}
+				}
+				state.Attachments = append(state.Attachments, a)
+			}
+		}
+	}
+	for _, m := range m.mountManager.mounts {
+		state.Mounts = append(state.Mounts, scsiStateMount{
+			Controller: m.controller,
+			LUN:        m.lun,
+			Path:       m.path,
+			Config: scsiStateMountConfig{
+				ReadOnly: m.config.readOnly,
+				Options:  m.config.options,
+			},
+			RefCount: m.refCount,
+		})
+	}
+	state.MountFmt = m.mountManager.mountFmt
+	if err := statepkg.Write(filepath.Join(path, "state.json"), &state); err != nil {
+		return err
+	}
+	return nil
+}
+
+type ManagerRestorer struct {
+	state *scsiState
+}
+
+func RestoreManager(ctx context.Context, path string) (*ManagerRestorer, error) {
+	state, err := statepkg.Read[scsiState](filepath.Join(path, "state.json"))
+	if err != nil {
+		return nil, err
+	}
+	return &ManagerRestorer{state}, nil
+}
+
+func (mr *ManagerRestorer) Restore(
+	ctx context.Context,
+	hb HostBackend,
+	gb GuestBackend,
+	numControllers int,
+	numLUNsPerController int,
+) *Manager {
+	am := &attachManager{
+		attacher:             hb,
+		unplugger:            gb,
+		numControllers:       numControllers,
+		numLUNsPerController: numLUNsPerController,
+		slots:                make([][]*attachment, numControllers),
+	}
+	for i := range am.slots {
+		am.slots[i] = make([]*attachment, numLUNsPerController)
+	}
+	for _, a := range mr.state.Attachments {
+		am.slots[a.Controller][a.LUN] = &attachment{
+			controller: a.Controller,
+			lun:        a.LUN,
+			config: &attachConfig{
+				path:     a.Config.Path,
+				readOnly: a.Config.ReadOnly,
+				typ:      a.Config.Type,
+			},
+			waitCh:   make(chan struct{}),
+			refCount: a.RefCount,
+		}
+		close(am.slots[a.Controller][a.LUN].waitCh)
+	}
+	mm := &mountManager{
+		mounter:  gb,
+		mounts:   make([]*mount, 0, len(mr.state.Mounts)),
+		mountFmt: mr.state.MountFmt,
+	}
+	for i, m := range mr.state.Mounts {
+		mm.mounts = append(mm.mounts, &mount{
+			path:       m.Path,
+			index:      i,
+			controller: m.Controller,
+			lun:        m.LUN,
+			config: &mountConfig{
+				readOnly: m.Config.ReadOnly,
+				options:  m.Config.Options,
+			},
+			waitCh:   make(chan struct{}),
+			refCount: m.RefCount,
+		})
+		close(mm.mounts[i].waitCh)
+	}
+	return &Manager{am, mm}
 }

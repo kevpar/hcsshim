@@ -16,6 +16,7 @@ import (
 	typeurl "github.com/containerd/typeurl/v2"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -84,72 +85,85 @@ func (s *service) createInternal(ctx context.Context, req *task.CreateTaskReques
 		shimOpts = v.(*runhcsopts.Options)
 	}
 
+	rawSpec, err := os.ReadFile(filepath.Join(req.Bundle, "config.json"))
+	if err != nil {
+		return nil, err
+	}
+	var restoreSpec struct {
+		Typ         string
+		Path        string
+		NetNS       string
+		ScratchPath string
+	}
+	if err := json.Unmarshal(rawSpec, &restoreSpec); err != nil {
+		return nil, err
+	}
+	logrus.WithField("restoreSpec", restoreSpec).Info("RESTORESPEC")
+	restore := restoreSpec.Typ == "RESTORESPEC"
 	var spec specs.Spec
-	f, err := os.Open(filepath.Join(req.Bundle, "config.json"))
-	if err != nil {
-		return nil, err
-	}
-	if err := json.NewDecoder(f).Decode(&spec); err != nil {
-		f.Close()
-		return nil, err
-	}
-	f.Close()
-
-	spec = oci.UpdateSpecFromOptions(spec, shimOpts)
-	//expand annotations after defaults have been loaded in from options
-	err = oci.ProcessAnnotations(ctx, &spec)
-	// since annotation expansion is used to toggle security features
-	// raise it rather than suppress and move on
-	if err != nil {
-		return nil, errors.Wrap(err, "unable to process OCI Spec annotations")
-	}
-
-	// If sandbox isolation is set to hypervisor, make sure the HyperV option
-	// is filled in. This lessens the burden on Containerd to parse our shims
-	// options if we can set this ourselves.
-	if shimOpts.SandboxIsolation == runhcsopts.Options_HYPERVISOR {
-		if spec.Windows == nil {
-			spec.Windows = &specs.Windows{}
-		}
-		if spec.Windows.HyperV == nil {
-			spec.Windows.HyperV = &specs.WindowsHyperV{}
+	if !restore {
+		if err := json.Unmarshal(rawSpec, &spec); err != nil {
+			return nil, err
 		}
 	}
 
-	var layerFolders []string
-	if spec.Windows != nil {
-		layerFolders = spec.Windows.LayerFolders
-	}
-	if err := validateRootfsAndLayers(req.Rootfs, layerFolders); err != nil {
-		return nil, err
-	}
-
-	// Only work with Windows here.
-	// Parsing of the rootfs mount for Linux containers occurs later.
-	if spec.Linux == nil && len(req.Rootfs) > 0 {
-		// For Windows containers, we work with LayerFolders throughout
-		// much of the creation logic in the shim. If we were given a
-		// rootfs mount, convert it to LayerFolders here.
-		m := req.Rootfs[0]
-		if m.Type != "windows-layer" {
-			return nil, fmt.Errorf("unsupported Windows mount type: %s", m.Type)
-		}
-
-		source, parentLayerPaths, err := parseLegacyRootfsMount(m)
+	if !restore {
+		spec = oci.UpdateSpecFromOptions(spec, shimOpts)
+		//expand annotations after defaults have been loaded in from options
+		err = oci.ProcessAnnotations(ctx, &spec)
+		// since annotation expansion is used to toggle security features
+		// raise it rather than suppress and move on
 		if err != nil {
+			return nil, errors.Wrap(err, "unable to process OCI Spec annotations")
+		}
+
+		// If sandbox isolation is set to hypervisor, make sure the HyperV option
+		// is filled in. This lessens the burden on Containerd to parse our shims
+		// options if we can set this ourselves.
+		if shimOpts.SandboxIsolation == runhcsopts.Options_HYPERVISOR {
+			if spec.Windows == nil {
+				spec.Windows = &specs.Windows{}
+			}
+			if spec.Windows.HyperV == nil {
+				spec.Windows.HyperV = &specs.WindowsHyperV{}
+			}
+		}
+
+		var layerFolders []string
+		if spec.Windows != nil {
+			layerFolders = spec.Windows.LayerFolders
+		}
+		if err := validateRootfsAndLayers(req.Rootfs, layerFolders); err != nil {
 			return nil, err
 		}
 
-		// Append the parents
-		spec.Windows.LayerFolders = append(spec.Windows.LayerFolders, parentLayerPaths...)
-		// Append the scratch
-		spec.Windows.LayerFolders = append(spec.Windows.LayerFolders, source)
-	}
+		// Only work with Windows here.
+		// Parsing of the rootfs mount for Linux containers occurs later.
+		if spec.Linux == nil && len(req.Rootfs) > 0 {
+			// For Windows containers, we work with LayerFolders throughout
+			// much of the creation logic in the shim. If we were given a
+			// rootfs mount, convert it to LayerFolders here.
+			m := req.Rootfs[0]
+			if m.Type != "windows-layer" {
+				return nil, fmt.Errorf("unsupported Windows mount type: %s", m.Type)
+			}
 
-	// This is a Windows Argon make sure that we have a Root filled in.
-	if spec.Windows.HyperV == nil {
-		if spec.Root == nil {
-			spec.Root = &specs.Root{}
+			source, parentLayerPaths, err := parseLegacyRootfsMount(m)
+			if err != nil {
+				return nil, err
+			}
+
+			// Append the parents
+			spec.Windows.LayerFolders = append(spec.Windows.LayerFolders, parentLayerPaths...)
+			// Append the scratch
+			spec.Windows.LayerFolders = append(spec.Windows.LayerFolders, source)
+		}
+
+		// This is a Windows Argon make sure that we have a Root filled in.
+		if spec.Windows.HyperV == nil {
+			if spec.Root == nil {
+				spec.Root = &specs.Root{}
+			}
 		}
 	}
 
@@ -172,7 +186,18 @@ func (s *service) createInternal(ctx context.Context, req *task.CreateTaskReques
 			resp.Pid = uint32(e.Pid())
 			return resp, nil
 		}
-		pod, err = createPod(ctx, s.events, req, &spec)
+		if restore {
+			pod, err = restorePod(
+				ctx,
+				filepath.Join(restoreSpec.Path, "sandbox"),
+				restoreSpec.NetNS,
+				restoreSpec.ScratchPath,
+				s.events,
+				req,
+			)
+		} else {
+			pod, err = createPod(ctx, s.events, req, &spec)
+		}
 		if err != nil {
 			s.cl.Unlock()
 			return nil, err

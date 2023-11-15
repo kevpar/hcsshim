@@ -26,6 +26,7 @@ import (
 	runhcsopts "github.com/Microsoft/hcsshim/cmd/containerd-shim-runhcs-v1/options"
 	"github.com/Microsoft/hcsshim/internal/extendedtask"
 	hcslog "github.com/Microsoft/hcsshim/internal/log"
+	"github.com/Microsoft/hcsshim/internal/save"
 	"github.com/Microsoft/hcsshim/internal/shimdiag"
 	"github.com/Microsoft/hcsshim/pkg/octtrpc"
 )
@@ -193,6 +194,12 @@ var serveCommand = cli.Command{
 			return fmt.Errorf("failed to create new service: %w", err)
 		}
 
+		if p := newShimOpts.RestorePath; p != "" {
+			if err := svc.restore(context.Background(), p); err != nil {
+				return fmt.Errorf("restore shim from state %q: %w", p, err)
+			}
+		}
+
 		s, err := ttrpc.NewServer(ttrpc.WithUnaryServerInterceptor(octtrpc.ServerInterceptor()))
 		if err != nil {
 			return err
@@ -201,6 +208,7 @@ var serveCommand = cli.Command{
 		task.RegisterTaskService(s, svc)
 		shimdiag.RegisterShimDiagService(s, svc)
 		extendedtask.RegisterExtendedTaskService(s, svc)
+		save.RegisterSaveService(s, svc)
 
 		sl, err := winio.ListenPipe(socket, nil)
 		if err != nil {

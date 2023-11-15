@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/Microsoft/hcsshim/cmd/containerd-shim-runhcs-v1/options"
@@ -141,6 +142,10 @@ func (tst *testShimTask) Stats(ctx context.Context) (*stats.Statistics, error) {
 		return getWCOWTestStats(), nil
 	}
 	return getLCOWTestStats(), nil
+}
+
+func (tst *testShimTask) Save(ctx context.Context, path string) error {
+	return fmt.Errorf("not implemented")
 }
 
 func getWCOWTestStats() *stats.Statistics {

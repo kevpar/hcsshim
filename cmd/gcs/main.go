@@ -182,9 +182,9 @@ func main() {
 		"",
 		"Logging Target: An optional file name/path. Omit for console output.")
 	logFormat := flag.String("log-format", "text", "Logging Format: text or json")
-	useInOutErr := flag.Bool("use-inouterr",
-		false,
-		"If true use stdin/stdout for bridge communication and stderr for logging")
+	// useInOutErr := flag.Bool("use-inouterr",
+	// 	false,
+	// 	"If true use stdin/stdout for bridge communication and stderr for logging")
 	v4 := flag.Bool("v4", false, "enable the v4 protocol support and v2 schema")
 	rootMemReserveBytes := flag.Uint64("root-mem-reserve-bytes",
 		75*1024*1024, // 75Mib
@@ -307,24 +307,6 @@ func main() {
 	h := hcsv2.NewHost(rtime, tport, initialEnforcer, logWriter)
 	b.AssignHandlers(mux, h)
 
-	var bridgeIn io.ReadCloser
-	var bridgeOut io.WriteCloser
-	if *useInOutErr {
-		bridgeIn = os.Stdin
-		bridgeOut = os.Stdout
-	} else {
-		const commandPort uint32 = 0x40000000
-		bridgeCon, err := tport.Dial(commandPort)
-		if err != nil {
-			logrus.WithFields(logrus.Fields{
-				"port":          commandPort,
-				logrus.ErrorKey: err,
-			}).Fatal("failed to dial host vsock connection")
-		}
-		bridgeIn = bridgeCon
-		bridgeOut = bridgeCon
-	}
-
 	// Setup the UVM cgroups to protect against a workload taking all available
 	// memory and causing the GCS to malfunction we create two cgroups: gcs,
 	// containers.
@@ -390,10 +372,22 @@ func main() {
 
 	go readMemoryEvents(startTime, gefdFile, "/gcs", int64(*gcsMemLimitBytes), gcsControl)
 	go readMemoryEvents(startTime, oomFile, "/containers", containersLimit, containersControl)
-	err = b.ListenAndServe(bridgeIn, bridgeOut)
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			logrus.ErrorKey: err,
-		}).Fatal("failed to serve gcs service")
+
+	for {
+		const commandPort uint32 = 0x40000000
+		bridgeCon, err := tport.Dial(commandPort)
+		if err != nil {
+			logrus.WithFields(logrus.Fields{
+				"port":          commandPort,
+				logrus.ErrorKey: err,
+			}).Error("failed to dial host vsock connection")
+		}
+		err = b.ListenAndServe(bridgeCon, bridgeCon)
+		if err != nil {
+			logrus.WithFields(logrus.Fields{
+				logrus.ErrorKey: err,
+			}).Error("failed to serve gcs service")
+		}
+		time.Sleep(3 * time.Second)
 	}
 }

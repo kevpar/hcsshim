@@ -86,6 +86,14 @@ func (tsp *testShimPod) DeleteTask(ctx context.Context, tid string) error {
 	return nil
 }
 
+func (tsp *testShimPod) StartSave(ctx context.Context, path string) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (tsp *testShimPod) CompleteSave(ctx context.Context, path string) error {
+	return fmt.Errorf("not implemented")
+}
+
 // Pod tests
 
 func setupTestPodWithFakes(t *testing.T) (*pod, *testShimTask) {

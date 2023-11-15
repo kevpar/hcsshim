@@ -12,6 +12,7 @@ import (
 
 	"github.com/Microsoft/hcsshim/internal/log"
 	"github.com/Microsoft/hcsshim/internal/oci"
+	"github.com/Microsoft/hcsshim/internal/state"
 	"github.com/Microsoft/hcsshim/internal/uvm"
 	"github.com/Microsoft/hcsshim/osversion"
 	"github.com/Microsoft/hcsshim/pkg/annotations"
@@ -66,6 +67,9 @@ type shimPod interface {
 	// return `errdefs.ErrFailedPrecondition`. Deleting the pod's sandbox task
 	// is a no-op.
 	DeleteTask(ctx context.Context, tid string) error
+
+	StartSave(ctx context.Context, path string) error
+	CompleteSave(ctx context.Context, path string) error
 }
 
 func createPod(ctx context.Context, events publisher, req *task.CreateTaskRequest, s *specs.Spec) (_ shimPod, err error) {
@@ -448,4 +452,67 @@ func (p *pod) DeleteTask(ctx context.Context, tid string) error {
 	}
 
 	return nil
+}
+
+type podState struct {
+	ID   string
+	Spec *specs.Spec
+}
+
+func (p *pod) StartSave(ctx context.Context, path string) error {
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return err
+	}
+	if p.host == nil {
+		return fmt.Errorf("can only save VM-isolated pods")
+	}
+	if err := p.host.StartSave(ctx, filepath.Join(path, "uvm")); err != nil {
+		return fmt.Errorf("save UVM: %w", err)
+	}
+	if err := p.sandboxTask.Save(ctx, filepath.Join(path, "sandboxTask")); err != nil {
+		return err
+	}
+	if err := state.Write(filepath.Join(path, "state.json"),
+		&podState{
+			ID:   p.id,
+			Spec: p.spec,
+		}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *pod) CompleteSave(ctx context.Context, path string) error {
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return err
+	}
+	if p.host == nil {
+		return fmt.Errorf("can only save VM-isolated pods")
+	}
+	if err := p.host.CompleteSave(ctx, filepath.Join(path, "uvm")); err != nil {
+		return fmt.Errorf("save UVM: %w", err)
+	}
+	return nil
+}
+
+type standbyPod struct {
+	state *podState
+	host  *uvm.UtilityVM
+}
+
+func restorePod(ctx context.Context, path string, netNS string, scratchPath string, events publisher, req *task.CreateTaskRequest) (_ shimPod, err error) {
+	p := &pod{
+		events: events,
+		id:     req.ID,
+	}
+	p.host, err = uvm.RestoreUVM(ctx, filepath.Join(path, "uvm"), netNS, scratchPath, req.ID)
+	if err != nil {
+		return nil, err
+	}
+	state, err := state.Read[podState](filepath.Join(path, "state.json"))
+	if err != nil {
+		return nil, err
+	}
+	p.spec = state.Spec
+	return p, nil
 }

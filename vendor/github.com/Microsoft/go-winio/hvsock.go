@@ -18,6 +18,7 @@ import (
 
 	"github.com/Microsoft/go-winio/internal/socket"
 	"github.com/Microsoft/go-winio/pkg/guid"
+	"github.com/sirupsen/logrus"
 )
 
 const afHVSock = 34 // AF_HYPERV
@@ -194,6 +195,18 @@ func newHVSocket() (*win32File, error) {
 	return f, nil
 }
 
+func cs(h windows.Handle) error {
+	fmt.Printf("setting CS on %x\n", h)
+	var v uint32 = 1
+	return windows.Setsockopt(
+		h,
+		1,
+		4,
+		(*byte)(unsafe.Pointer(&v)),
+		4,
+	)
+}
+
 // ListenHvsock listens for connections on the specified hvsock address.
 func ListenHvsock(addr *HvsockAddr) (_ *HvsockListener, err error) {
 	l := &HvsockListener{addr: *addr}
@@ -205,6 +218,13 @@ func ListenHvsock(addr *HvsockAddr) (_ *HvsockListener, err error) {
 	err = socket.Bind(windows.Handle(sock.handle), &sa)
 	if err != nil {
 		return nil, l.opErr("listen", os.NewSyscallError("socket", err))
+	}
+	logrus.WithFields(logrus.Fields{
+		"vmID":      addr.VMID.String(),
+		"serviceID": addr.ServiceID.String(),
+	}).Info("enabled CS on socket")
+	if err = cs(windows.Handle(sock.handle)); err != nil {
+		return nil, l.opErr("listen", os.NewSyscallError("setsockopt", err))
 	}
 	err = syscall.Listen(sock.handle, 16)
 	if err != nil {

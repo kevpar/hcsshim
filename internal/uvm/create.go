@@ -179,6 +179,8 @@ func (uvm *UtilityVM) OS() string {
 }
 
 func (uvm *UtilityVM) create(ctx context.Context, doc interface{}) error {
+	uvm.config = doc.(*hcsschema.ComputeSystem)
+
 	uvm.exitCh = make(chan struct{})
 	system, err := hcs.CreateComputeSystem(ctx, uvm.id, doc)
 	if err != nil {
@@ -190,6 +192,10 @@ func (uvm *UtilityVM) create(ctx context.Context, doc interface{}) error {
 			_ = system.WaitCtx(ctx)
 		}
 	}()
+
+	system.ModifyHook = func(change any) error {
+		return updateConfig(uvm.config, change)
+	}
 
 	// Cache the VM ID of the utility VM.
 	properties, err := system.Properties(ctx)
@@ -215,6 +221,7 @@ func (uvm *UtilityVM) Close() error { return uvm.CloseCtx(context.Background()) 
 // The context is used for all operations, including waits, so timeouts/cancellations may prevent
 // proper uVM cleanup.
 func (uvm *UtilityVM) CloseCtx(ctx context.Context) (err error) {
+	log.G(ctx).Info("CLOSECTX")
 	ctx, span := oc.StartSpan(ctx, "uvm::Close")
 	defer span.End()
 	defer func() { oc.SetSpanStatus(span, err) }()
@@ -394,6 +401,7 @@ func (uvm *UtilityVM) NoWritableFileShares() bool {
 // Closes the external GCS connection if it is being used and also closes the
 // listener for GCS connection.
 func (uvm *UtilityVM) CloseGCSConnection() (err error) {
+	logrus.Warn("YOU HAVE A BAD CONNECTION")
 	if uvm.gc != nil {
 		err = uvm.gc.Close()
 	}

@@ -18,6 +18,7 @@ import (
 
 	"github.com/Microsoft/hcsshim/internal/extendedtask"
 	"github.com/Microsoft/hcsshim/internal/oc"
+	"github.com/Microsoft/hcsshim/internal/save"
 	"github.com/Microsoft/hcsshim/internal/shimdiag"
 )
 
@@ -64,7 +65,8 @@ type service struct {
 	// taskOrPod is either the `pod` this shim is tracking if `isSandbox ==
 	// true` or it is the `task` this shim is tracking. If no call to `Create`
 	// has taken place yet `taskOrPod.Load()` MUST return `nil`.
-	taskOrPod atomic.Value
+	taskOrPod  atomic.Value
+	standbyPod *standbyPod
 
 	// cl is the create lock. Since each shim MUST only track a single task or
 	// POD. `cl` is used to create the task or POD sandbox. It SHOULD NOT be
@@ -79,6 +81,8 @@ type service struct {
 	// gracefulShutdown dictates whether to shutdown gracefully and clean up resources
 	// or exit immediately
 	gracefulShutdown bool
+
+	savePath string
 }
 
 var _ task.TaskService = &service{}
@@ -92,7 +96,7 @@ func NewService(o ...ServiceOption) (svc *service, err error) {
 	svc = &service{
 		events:    opts.Events,
 		tid:       opts.TID,
-		isSandbox: opts.IsSandbox,
+		isSandbox: true, //opts.IsSandbox,
 		shutdown:  make(chan struct{}),
 	}
 	return svc, nil
@@ -530,6 +534,39 @@ func (s *service) DiagPid(ctx context.Context, req *shimdiag.PidRequest) (*shimd
 	return &shimdiag.PidResponse{
 		Pid: int32(os.Getpid()),
 	}, nil
+}
+
+func (s *service) StartSave(ctx context.Context, req *save.StartSaveRequest) (*save.StartSaveResponse, error) {
+	if s == nil {
+		return nil, nil
+	}
+	ctx, span := oc.StartSpan(ctx, "StartSave") //nolint:ineffassign,staticcheck
+	defer span.End()
+
+	span.AddAttributes(trace.StringAttribute("tid", s.tid))
+	span.AddAttributes(trace.StringAttribute("sandboxID", req.PodId))
+	span.AddAttributes(trace.StringAttribute("path", req.Path))
+
+	err := s.startSave(ctx, req.Path)
+	s.savePath = req.Path
+
+	return &save.StartSaveResponse{}, errdefs.ToGRPC(err)
+}
+
+func (s *service) CompleteSave(ctx context.Context, req *save.CompleteSaveRequest) (*save.CompleteSaveResponse, error) {
+	if s == nil {
+		return nil, nil
+	}
+	ctx, span := oc.StartSpan(ctx, "CompleteSave") //nolint:ineffassign,staticcheck
+	defer span.End()
+
+	span.AddAttributes(trace.StringAttribute("tid", s.tid))
+	span.AddAttributes(trace.StringAttribute("sandboxID", req.PodId))
+
+	err := s.completeSave(ctx, s.savePath)
+	s.savePath = ""
+
+	return &save.CompleteSaveResponse{}, errdefs.ToGRPC(err)
 }
 
 func (s *service) ComputeProcessorInfo(ctx context.Context, req *extendedtask.ComputeProcessorInfoRequest) (*extendedtask.ComputeProcessorInfoResponse, error) {

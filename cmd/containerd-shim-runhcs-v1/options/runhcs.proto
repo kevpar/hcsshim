@@ -107,6 +107,8 @@ message Options {
 
 	// scrub_logs enables removing environment variables and other potentially sensitive information from logs
 	bool scrub_logs = 20;
+
+	string restore_path = 21;
 }
 
 // ProcessDetails contains additional information about a process. This is the additional

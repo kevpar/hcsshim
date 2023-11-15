@@ -246,7 +246,9 @@ func (brdg *bridge) RPC(ctx context.Context, proc rpcProc, req requestMessage, r
 }
 
 func (brdg *bridge) recvLoopRoutine() {
-	brdg.kill(brdg.recvLoop())
+	err := brdg.recvLoop()
+	logrus.WithError(err).Warn("bridge recvLoop exited")
+	brdg.kill(err)
 	// Fail any remaining RPCs.
 	brdg.mu.Lock()
 	rpcs := brdg.rpcs
@@ -290,6 +292,7 @@ func (brdg *bridge) recvLoop() error {
 	for {
 		id, typ, b, err := readMessage(br)
 		if err != nil {
+			logrus.WithError(err).Warn("bridge read disconnect")
 			if err == io.EOF || isLocalDisconnectError(err) {
 				return nil
 			}

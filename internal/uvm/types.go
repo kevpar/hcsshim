@@ -13,6 +13,7 @@ import (
 	"github.com/Microsoft/hcsshim/internal/gcs"
 	"github.com/Microsoft/hcsshim/internal/hcs"
 	"github.com/Microsoft/hcsshim/internal/hcs/schema1"
+	hcsschema "github.com/Microsoft/hcsshim/internal/hcs/schema2"
 	"github.com/Microsoft/hcsshim/internal/hns"
 	"github.com/Microsoft/hcsshim/internal/uvm/scsi"
 )
@@ -34,6 +35,8 @@ type namespaceInfo struct {
 
 // UtilityVM is the object used by clients representing a utility VM
 type UtilityVM struct {
+	config *hcsschema.ComputeSystem
+
 	id               string               // Identifier for the utility VM (user supplied or generated)
 	runtimeID        guid.GUID            // Hyper-V VM ID
 	owner            string               // Owner for the utility VM (user supplied or generated)
@@ -90,6 +93,7 @@ type UtilityVM struct {
 
 	// SCSI devices that are mapped into a Windows or Linux utility VM
 	SCSIManager         *scsi.Manager
+	SCSIRestorer        *scsi.ManagerRestorer
 	scsiControllerCount uint32 // Number of SCSI controllers in the utility VM
 	reservedSCSISlots   []scsi.Slot
 

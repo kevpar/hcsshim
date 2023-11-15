@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -312,4 +313,8 @@ func (wpst *wcowPodSandboxTask) ProcessorInfo(ctx context.Context) (*processorIn
 	return &processorInfo{
 		count: wpst.host.ProcessorCount(),
 	}, nil
+}
+
+func (wpst *wcowPodSandboxTask) Save(ctx context.Context, path string) error {
+	return fmt.Errorf("not implemented")
 }

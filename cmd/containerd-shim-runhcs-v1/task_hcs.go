@@ -1056,3 +1056,10 @@ func (ht *hcsTask) updateWCOWContainerMount(ctx context.Context, resources *ctrd
 	}
 	return nil
 }
+
+func (ht *hcsTask) Save(ctx context.Context, path string) error {
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return err
+	}
+	return nil
+}

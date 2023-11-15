@@ -594,9 +594,14 @@ func makeLCOWDoc(ctx context.Context, opts *OptionsLCOW, uvm *UtilityVM) (_ *hcs
 						// Allow administrators and SYSTEM to bind to vsock sockets
 						// so that we can create a GCS log socket.
 						DefaultBindSecurityDescriptor: "D:P(A;;FA;;;SY)(A;;FA;;;BA)",
+						ServiceTable: map[string]hcsschema.HvSocketServiceConfig{
+							"0000006d-facb-11e6-bd58-64006a7986d3": hcsschema.HvSocketServiceConfig{
+								BindSecurityDescriptor: "D:P(A;;FA;;;SY)(A;;FA;;;BA)",
+								AllowWildcardBinds:     true,
+							},
+						},
 					},
 				},
-				Plan9: &hcsschema.Plan9{},
 			},
 		},
 	}
@@ -688,7 +693,7 @@ func makeLCOWDoc(ctx context.Context, opts *OptionsLCOW, uvm *UtilityVM) (_ *hcs
 	}
 
 	vmDebugging := false
-	if opts.ConsolePipe != "" {
+	if opts.ConsolePipe != "" || true {
 		vmDebugging = true
 		kernelArgs += " 8250_core.nr_uarts=1 8250_core.skip_txen_test=1 console=ttyS0,115200"
 		doc.VirtualMachine.Devices.ComPorts = map[string]hcsschema.ComPort{
@@ -759,6 +764,13 @@ func makeLCOWDoc(ctx context.Context, opts *OptionsLCOW, uvm *UtilityVM) (_ *hcs
 
 	kernelArgs += fmt.Sprintf(" nr_cpus=%d", opts.ProcessorCount)
 	kernelArgs += ` brd.rd_nr=0 pmtmr=0 -- ` + initArgs
+
+	doc.VirtualMachine.Devices.ComPorts = map[string]hcsschema.ComPort{
+		"0": { // Which is actually COM1
+			NamedPipe: `\\.\pipe\vmpipe`,
+		},
+	}
+	kernelArgs = "8250_core.nr_uarts=1 8250_core.skip_txen_test=1 console=ttyS0,115200 pci=off nr_cpus=2 brd.rd_nr=0 pmtmr=0 quiet -- -e 1 /bin/gcs -v4 -log-format json -loglevel debug"
 
 	if !opts.KernelDirect {
 		doc.VirtualMachine.Chipset.Uefi = &hcsschema.Uefi{
@@ -867,10 +879,10 @@ func CreateLCOW(ctx context.Context, opts *OptionsLCOW) (_ *UtilityVM, err error
 	if opts.ForwardStdout || opts.ForwardStderr {
 		uvm.outputHandler = opts.OutputHandlerCreator(opts.Options)
 		uvm.outputProcessingDone = make(chan struct{})
-		uvm.outputListener, err = uvm.listenVsock(linuxLogVsockPort)
-		if err != nil {
-			return nil, err
-		}
+		// uvm.outputListener, err = uvm.listenVsock(linuxLogVsockPort)
+		// if err != nil {
+		// 	return nil, err
+		// }
 	}
 
 	if opts.UseGuestConnection {

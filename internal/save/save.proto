@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package containerd.runhcs.v1.diag;
+option go_package = "github.com/Microsoft/hcsshim/internal/save;save";
+
+service Save {
+    rpc StartSave(StartSaveRequest) returns (StartSaveResponse);
+    rpc CompleteSave(CompleteSaveRequest) returns (CompleteSaveResponse);
+}
+
+message StartSaveRequest {
+    string pod_id = 1;
+    string path = 2;
+}
+
+message StartSaveResponse {}
+
+message CompleteSaveRequest {
+    string pod_id = 1;
+}
+
+message CompleteSaveResponse {}

@@ -99,6 +99,8 @@ type shimTask interface {
 	ProcessorInfo(ctx context.Context) (*processorInfo, error)
 	// Update updates a task's container
 	Update(ctx context.Context, req *task.UpdateTaskRequest) error
+
+	Save(ctx context.Context, path string) error
 }
 
 type processorInfo struct {
