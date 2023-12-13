@@ -87,6 +87,10 @@ var (
 	_ cow.Container   = &JobContainer{}
 )
 
+func (jc *JobContainer) RestoreProcess(ctx context.Context, path string) (cow.Process, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
 func newJobContainer(id string, s *specs.Spec) *JobContainer {
 	return &JobContainer{
 		id:        id,

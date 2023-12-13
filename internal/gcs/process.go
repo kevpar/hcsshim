@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/Microsoft/go-winio"
@@ -15,6 +17,7 @@ import (
 	"github.com/Microsoft/hcsshim/internal/log"
 	"github.com/Microsoft/hcsshim/internal/logfields"
 	"github.com/Microsoft/hcsshim/internal/oc"
+	"github.com/Microsoft/hcsshim/internal/state"
 	"github.com/sirupsen/logrus"
 	"go.opencensus.io/trace"
 )
@@ -25,14 +28,15 @@ const (
 
 // Process represents a process in a container or container host.
 type Process struct {
-	gc                    *GuestConnection
-	cid                   string
-	id                    uint32
-	waitCall              *rpc
-	waitResp              containerWaitForProcessResponse
-	stdin, stdout, stderr *ioChannel
-	stdinCloseWriteOnce   sync.Once
-	stdinCloseWriteErr    error
+	gc                                *GuestConnection
+	cid                               string
+	id                                uint32
+	waitCall                          *rpc
+	waitResp                          containerWaitForProcessResponse
+	stdin, stdout, stderr             *ioChannel
+	stdinCloseWriteOnce               sync.Once
+	stdinCloseWriteErr                error
+	stdinPort, stdoutPort, stderrPort uint32
 }
 
 var _ cow.Process = &Process{}
@@ -99,6 +103,7 @@ func (gc *GuestConnection) exec(ctx context.Context, cid string, params interfac
 		g := winio.VsockServiceID(vsockSettings.StdErr)
 		hvsockSettings.StdErr = &g
 	}
+	p.stdinPort, p.stdoutPort, p.stderrPort = vsockSettings.StdIn, vsockSettings.StdOut, vsockSettings.StdErr
 
 	var resp containerExecuteProcessResponse
 	err = gc.brdg.RPC(ctx, rpcExecuteProcess, &req, &resp, false)
@@ -119,6 +124,29 @@ func (gc *GuestConnection) exec(ctx context.Context, cid string, params interfac
 	}
 	go p.waitBackground()
 	return p, nil
+}
+
+type processState struct {
+	CID                               string
+	PID                               uint32
+	StdinPort, StdoutPort, StderrPort uint32
+}
+
+func (p *Process) Save(ctx context.Context, path string) error {
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return err
+	}
+	s := processState{
+		CID:        p.cid,
+		PID:        p.id,
+		StdinPort:  p.stdinPort,
+		StdoutPort: p.stdoutPort,
+		StderrPort: p.stderrPort,
+	}
+	if err := state.Write(filepath.Join(path, "state.json"), &s); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Close releases resources associated with the process and closes the

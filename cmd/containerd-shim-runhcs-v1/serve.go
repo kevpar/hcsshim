@@ -28,6 +28,7 @@ import (
 	hcslog "github.com/Microsoft/hcsshim/internal/log"
 	"github.com/Microsoft/hcsshim/internal/save"
 	"github.com/Microsoft/hcsshim/internal/shimdiag"
+	"github.com/Microsoft/hcsshim/internal/winapi"
 	"github.com/Microsoft/hcsshim/pkg/octtrpc"
 )
 
@@ -48,6 +49,17 @@ var serveCommand = cli.Command{
 		},
 	},
 	Action: func(ctx *cli.Context) error {
+
+		_, err := os.Stat(`c:\debugwait`)
+		if err == nil {
+			for {
+				if winapi.IsDebuggerPresent() {
+					break
+				}
+				time.Sleep(1 * time.Second)
+			}
+		}
+
 		// On Windows the serve command is internally used to actually create
 		// the process that hosts the containerd/ttrpc entrypoint to the Runtime
 		// V2 API's. The model requires this 2nd invocation of the shim process

@@ -45,6 +45,10 @@ var sigMap = map[string]int{
 
 var _ cow.Process = &JobProcess{}
 
+func (p *JobProcess) Save(ctx context.Context, path string) error {
+	return fmt.Errorf("not implemented")
+}
+
 func newProcess(cmd *exec.Exec, cpty *conpty.Pty) *JobProcess {
 	return &JobProcess{
 		cmd:       cmd,

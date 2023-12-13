@@ -44,6 +44,10 @@ type System struct {
 var _ cow.Container = &System{}
 var _ cow.ProcessHost = &System{}
 
+func (s *System) RestoreProcess(ctx context.Context, path string) (cow.Process, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
 func newSystem(id string) *System {
 	return &System{
 		id:        id,

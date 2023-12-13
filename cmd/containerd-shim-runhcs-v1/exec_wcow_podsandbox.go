@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -205,4 +206,8 @@ func (wpse *wcowPodSandboxExec) ForceExit(ctx context.Context, status int) {
 
 		close(wpse.exited)
 	}
+}
+
+func (wpse *wcowPodSandboxExec) Save(ctx context.Context, path string) error {
+	return fmt.Errorf("not implemented")
 }

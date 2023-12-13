@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 	"regexp"
 
+	"github.com/Microsoft/go-winio/pkg/guid"
 	"github.com/Microsoft/hcsshim/hcn"
+	"github.com/Microsoft/hcsshim/internal/cow"
 	"github.com/Microsoft/hcsshim/internal/gcs"
 	"github.com/Microsoft/hcsshim/internal/hcs"
 	"github.com/Microsoft/hcsshim/internal/hcs/schema1"
@@ -140,6 +142,7 @@ type uvmState struct {
 	SCSIControllerCount     uint32
 	ReservedSCSISlots       []scsi.Slot
 	MountCounter            uint64
+	FirstPort               uint32
 }
 
 func (uvm *UtilityVM) StartSave(ctx context.Context, path string) error {
@@ -162,6 +165,7 @@ func (uvm *UtilityVM) StartSave(ctx context.Context, path string) error {
 		SCSIControllerCount:     uvm.scsiControllerCount,
 		ReservedSCSISlots:       uvm.reservedSCSISlots,
 		MountCounter:            uvm.mountCounter,
+		FirstPort:               uvm.gc.NextPort(),
 	}
 	if err := statepkg.Write(filepath.Join(path, "state.json"), &state); err != nil {
 		return err
@@ -172,6 +176,31 @@ func (uvm *UtilityVM) StartSave(ctx context.Context, path string) error {
 	if err := uvm.hcsSystem.Save(ctx, &hcsschema.SaveOptions{SaveStateFilePath: filepath.Join(path, "vm.state")}); err != nil {
 		return err
 	}
+
+	resources := make(map[string]Resource)
+	for controllerID, attachments := range uvm.config.VirtualMachine.Devices.Scsi {
+		for lun, att := range attachments.Attachments {
+			if att.ReadOnly {
+				continue
+			}
+			r := Resource{
+				SCSIDisk: &SCSIDisk{
+					Controller: controllerID,
+					LUN:        lun,
+					Path:       att.Path,
+				},
+			}
+			g, err := guid.NewV4()
+			if err != nil {
+				return err
+			}
+			resources[g.String()] = r
+		}
+	}
+	if err := statepkg.Write(filepath.Join(path, "resources.json"), &resources); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -185,7 +214,17 @@ func (uvm *UtilityVM) CompleteSave(ctx context.Context, path string) error {
 	return nil
 }
 
-func RestoreUVM(ctx context.Context, path string, netNS string, scratchPath string, id string) (*UtilityVM, error) {
+type SCSIDisk struct {
+	LUN        string
+	Controller string
+	Path       string
+}
+
+type Resource struct {
+	SCSIDisk *SCSIDisk
+}
+
+func RestoreUVM(ctx context.Context, path string, netNS string, resources map[string]string, id string) (*UtilityVM, error) {
 	state, err := statepkg.Read[uvmState](filepath.Join(path, "state.json"))
 	if err != nil {
 		return nil, err
@@ -206,6 +245,7 @@ func RestoreUVM(ctx context.Context, path string, netNS string, scratchPath stri
 		exitCh:               make(chan struct{}),
 		outputProcessingDone: make(chan struct{}),
 		outputHandler:        parseLogrus(&Options{ID: fmt.Sprintf("%s@vm", id)}),
+		firstPort:            state.FirstPort,
 	}
 	config, err := statepkg.Read[hcsschema.ComputeSystem](filepath.Join(path, "config.json"))
 	if err != nil {
@@ -242,29 +282,49 @@ func RestoreUVM(ctx context.Context, path string, netNS string, scratchPath stri
 		}
 	}
 
-	// Scratch disk
-	type disk struct {
-		controller string
-		lun        string
+	oldResources, err := statepkg.Read[map[string]Resource](filepath.Join(path, "resources.json"))
+	if err != nil {
+		return nil, err
 	}
-	var writableDisks []disk
-	for i := range config.VirtualMachine.Devices.Scsi {
-		for j := range config.VirtualMachine.Devices.Scsi[i].Attachments {
-			if !config.VirtualMachine.Devices.Scsi[i].Attachments[j].ReadOnly {
-				writableDisks = append(writableDisks, disk{i, j})
+	finalResources := *oldResources
+	for id, p := range resources {
+		r := finalResources[id]
+		r.SCSIDisk.Path = p
+		finalResources[id] = r
+	}
+	for _, r := range finalResources {
+		if scsi := r.SCSIDisk; scsi != nil {
+			att := config.VirtualMachine.Devices.Scsi[scsi.Controller].Attachments[scsi.LUN]
+			att.Path = scsi.Path
+			config.VirtualMachine.Devices.Scsi[scsi.Controller].Attachments[scsi.LUN] = att
+			if err := wclayer.GrantVmAccess(ctx, fmt.Sprintf("%s@vm", id), scsi.Path); err != nil {
+				return nil, err
 			}
 		}
 	}
-	if len(writableDisks) != 1 {
-		return nil, fmt.Errorf("expected 1 writable disk but got %d", len(writableDisks))
-	}
-	d := writableDisks[0]
-	scratch := config.VirtualMachine.Devices.Scsi[d.controller].Attachments[d.lun]
-	scratch.Path = scratchPath
-	config.VirtualMachine.Devices.Scsi[d.controller].Attachments[d.lun] = scratch
-	if err := wclayer.GrantVmAccess(ctx, fmt.Sprintf("%s@vm", id), scratchPath); err != nil {
-		return nil, err
-	}
+	// // Scratch disk
+	// type disk struct {
+	// 	controller string
+	// 	lun        string
+	// }
+	// var writableDisks []disk
+	// for i := range config.VirtualMachine.Devices.Scsi {
+	// 	for j := range config.VirtualMachine.Devices.Scsi[i].Attachments {
+	// 		if !config.VirtualMachine.Devices.Scsi[i].Attachments[j].ReadOnly {
+	// 			writableDisks = append(writableDisks, disk{i, j})
+	// 		}
+	// 	}
+	// }
+	// if len(writableDisks) != 1 {
+	// 	return nil, fmt.Errorf("expected 1 writable disk but got %d", len(writableDisks))
+	// }
+	// d := writableDisks[0]
+	// scratch := config.VirtualMachine.Devices.Scsi[d.controller].Attachments[d.lun]
+	// scratch.Path = scratchPath
+	// config.VirtualMachine.Devices.Scsi[d.controller].Attachments[d.lun] = scratch
+	// if err := wclayer.GrantVmAccess(ctx, fmt.Sprintf("%s@vm", id), scratchPath); err != nil {
+	// 	return nil, err
+	// }
 
 	config.VirtualMachine.RestoreState = &hcsschema.RestoreState{SaveStateFilePath: filepath.Join(path, "vm.state")}
 
@@ -280,10 +340,15 @@ func RestoreUVM(ctx context.Context, path string, netNS string, scratchPath stri
 	uvm.hcsSystem = system
 	uvm.config = config
 
-	// uvm.outputListener, err = uvm.listenVsock(linuxLogVsockPort)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	uvm.SCSIRestorer, err = scsi.RestoreManager(ctx, filepath.Join(path, "scsi"))
+	if err != nil {
+		return nil, err
+	}
+
+	uvm.outputListener, err = uvm.listenVsock(linuxLogVsockPort)
+	if err != nil {
+		return nil, err
+	}
 	uvm.gcListener, err = uvm.listenVsock(gcs.LinuxGcsVsockPort)
 	if err != nil {
 		return nil, err
@@ -293,10 +358,9 @@ func RestoreUVM(ctx context.Context, path string, netNS string, scratchPath stri
 		return nil, err
 	}
 
-	uvm.SCSIRestorer, err = scsi.RestoreManager(ctx, filepath.Join(path, "scsi"))
-	if err != nil {
-		return nil, err
-	}
-
 	return uvm, nil
+}
+
+func (uvm *UtilityVM) RestoreProcess(ctx context.Context, path string) (cow.Process, error) {
+	return nil, fmt.Errorf("not implemented")
 }

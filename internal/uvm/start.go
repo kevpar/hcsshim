@@ -278,7 +278,7 @@ func (uvm *UtilityVM) Start(ctx context.Context) (err error) {
 			IoListen:       gcs.HvsockIoListen(uvm.runtimeID),
 			InitGuestState: initGuestState,
 		}
-		uvm.gc, err = gcc.Connect(ctx, true)
+		uvm.gc, err = gcc.Connect(ctx, true, uvm.firstPort)
 		if err != nil {
 			return err
 		}

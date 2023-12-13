@@ -4,18 +4,21 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
 	cgroups "github.com/containerd/cgroups/v3/cgroup1"
 	cgroupstats "github.com/containerd/cgroups/v3/cgroup1/stats"
+	"github.com/linuxkit/virtsock/pkg/vsock"
 	oci "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -23,6 +26,7 @@ import (
 
 	"github.com/Microsoft/hcsshim/internal/guest/bridge"
 	"github.com/Microsoft/hcsshim/internal/guest/kmsg"
+	"github.com/Microsoft/hcsshim/internal/guest/reconn"
 	"github.com/Microsoft/hcsshim/internal/guest/runtime/hcsv2"
 	"github.com/Microsoft/hcsshim/internal/guest/runtime/runc"
 	"github.com/Microsoft/hcsshim/internal/guest/transport"
@@ -218,7 +222,8 @@ func main() {
 
 	logrus.AddHook(log.NewHook())
 
-	var logWriter *os.File
+	tport := &transport.VsockTransport{}
+	var logWriter io.Writer = os.Stderr
 	if *logFile != "" {
 		logFileHandle, err := os.OpenFile(*logFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 		if err != nil {
@@ -229,8 +234,35 @@ func main() {
 		}
 		logWriter = logFileHandle
 	} else {
+		l := logrus.New()
+		l.SetOutput(os.Stderr)
 		// logrus uses os.Stderr. see logrus.New()
-		logWriter = os.Stderr
+		d := func(ctx context.Context) (reconn.Conn, error) {
+			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			default:
+				l.Info("dial attempt starting")
+				c, err := vsock.Dial(vsock.CIDHost, 109)
+				l.WithError(err).Info("dial attempt complete")
+				return c, err
+			}
+		}
+		c, err := d(context.Background())
+		if err != nil {
+			l.WithError(err).Fatal("dial log pipe")
+		}
+		logWriter = reconn.NewPipe(
+			d,
+			c,
+			backoff.NewConstantBackOff(5*time.Second),
+			func(err error) bool {
+				l.WithError(err).Warn("log pipe disconnected")
+				return true
+			},
+		)
 	}
 
 	// set up our initial stance policy enforcer
@@ -294,18 +326,12 @@ func main() {
 	// Continuously log /dev/kmsg
 	go kmsg.ReadForever(kmsg.LogLevel(*kmsgLogLevel))
 
-	tport := &transport.VsockTransport{}
 	rtime, err := runc.NewRuntime(baseLogPath)
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to initialize new runc runtime")
 	}
 	mux := bridge.NewBridgeMux()
-	b := bridge.Bridge{
-		Handler:  mux,
-		EnableV4: *v4,
-	}
 	h := hcsv2.NewHost(rtime, tport, initialEnforcer, logWriter)
-	b.AssignHandlers(mux, h)
 
 	// Setup the UVM cgroups to protect against a workload taking all available
 	// memory and causing the GCS to malfunction we create two cgroups: gcs,
@@ -373,6 +399,7 @@ func main() {
 	go readMemoryEvents(startTime, gefdFile, "/gcs", int64(*gcsMemLimitBytes), gcsControl)
 	go readMemoryEvents(startTime, oomFile, "/containers", containersLimit, containersControl)
 
+	var p bridge.Publisher
 	for {
 		const commandPort uint32 = 0x40000000
 		bridgeCon, err := tport.Dial(commandPort)
@@ -382,6 +409,13 @@ func main() {
 				logrus.ErrorKey: err,
 			}).Error("failed to dial host vsock connection")
 		}
+		b := bridge.Bridge{
+			Handler:   mux,
+			EnableV4:  *v4,
+			Publisher: &p,
+		}
+		b.AssignHandlers(mux, h)
+		p.SetBridge(&b)
 		err = b.ListenAndServe(bridgeCon, bridgeCon)
 		if err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -390,4 +424,6 @@ func main() {
 		}
 		time.Sleep(3 * time.Second)
 	}
+
+	runtime.KeepAlive(logWriter)
 }

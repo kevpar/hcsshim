@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"sync"
@@ -42,6 +43,10 @@ type Process struct {
 }
 
 var _ cow.Process = &Process{}
+
+func (process *Process) Save(ctx context.Context, path string) error {
+	return fmt.Errorf("not implemented")
+}
 
 func newProcess(process vmcompute.HcsProcess, processID int, computeSystem *System) *Process {
 	return &Process{

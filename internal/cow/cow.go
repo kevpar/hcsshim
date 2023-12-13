@@ -47,6 +47,7 @@ type Process interface {
 	// ExitCode returns the exit code of the process. Returns an error if the process is
 	// not running.
 	ExitCode() (int, error)
+	Save(ctx context.Context, path string) error
 }
 
 // ProcessHost is the interface for creating processes.
@@ -54,6 +55,7 @@ type ProcessHost interface {
 	// CreateProcess creates a process. The configuration is host specific
 	// (either hcsschema.ProcessParameters or lcow.ProcessParameters).
 	CreateProcess(ctx context.Context, config interface{}) (Process, error)
+	RestoreProcess(ctx context.Context, path string) (Process, error)
 	// OS returns the host's operating system, "linux" or "windows".
 	OS() string
 	// IsOCI specifies whether this is an OCI-compliant process host. If true,

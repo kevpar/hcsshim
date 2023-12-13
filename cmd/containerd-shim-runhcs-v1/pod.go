@@ -70,6 +70,8 @@ type shimPod interface {
 
 	StartSave(ctx context.Context, path string) error
 	CompleteSave(ctx context.Context, path string) error
+
+	RestoreTask(ctx context.Context, oldID string, scratchPath string, events publisher, req *task.CreateTaskRequest) (shimTask, error)
 }
 
 func createPod(ctx context.Context, events publisher, req *task.CreateTaskRequest, s *specs.Spec) (_ shimPod, err error) {
@@ -299,6 +301,8 @@ type pod struct {
 	spec *specs.Spec
 
 	workloadTasks sync.Map
+
+	restorePath string
 }
 
 func (p *pod) ID() string {
@@ -472,6 +476,19 @@ func (p *pod) StartSave(ctx context.Context, path string) error {
 	if err := p.sandboxTask.Save(ctx, filepath.Join(path, "sandboxTask")); err != nil {
 		return err
 	}
+	var rangeErr error
+	p.workloadTasks.Range(func(key, value any) bool {
+		id := key.(string)
+		t := value.(shimTask)
+		if err := t.Save(ctx, filepath.Join(path, id)); err != nil {
+			rangeErr = err
+			return false
+		}
+		return true
+	})
+	if rangeErr != nil {
+		return rangeErr
+	}
 	if err := state.Write(filepath.Join(path, "state.json"),
 		&podState{
 			ID:   p.id,
@@ -500,12 +517,13 @@ type standbyPod struct {
 	host  *uvm.UtilityVM
 }
 
-func restorePod(ctx context.Context, path string, netNS string, scratchPath string, events publisher, req *task.CreateTaskRequest) (_ shimPod, err error) {
+func restorePod(ctx context.Context, path string, netNS string, resources map[string]string, events publisher, req *task.CreateTaskRequest) (_ shimPod, err error) {
 	p := &pod{
-		events: events,
-		id:     req.ID,
+		events:      events,
+		id:          req.ID,
+		restorePath: path,
 	}
-	p.host, err = uvm.RestoreUVM(ctx, filepath.Join(path, "uvm"), netNS, scratchPath, req.ID)
+	p.host, err = uvm.RestoreUVM(ctx, filepath.Join(path, "uvm"), netNS, resources, req.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -514,5 +532,19 @@ func restorePod(ctx context.Context, path string, netNS string, scratchPath stri
 		return nil, err
 	}
 	p.spec = state.Spec
+	st, err := restoreHcsTask(ctx, events, p.host, filepath.Join(path, "sandboxTask"), req, true, state.ID)
+	if err != nil {
+		return nil, err
+	}
+	p.sandboxTask = st
 	return p, nil
+}
+
+func (p *pod) RestoreTask(ctx context.Context, oldID string, scratchPath string, events publisher, req *task.CreateTaskRequest) (shimTask, error) {
+	t, err := restoreHcsTask(ctx, events, p.host, filepath.Join(p.restorePath, oldID), req, false, oldID)
+	if err != nil {
+		return nil, fmt.Errorf("restore task %s as %s: %w", oldID, req.ID, err)
+	}
+	p.workloadTasks.Store(req.ID, t)
+	return t, nil
 }

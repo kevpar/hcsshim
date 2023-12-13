@@ -770,7 +770,7 @@ func makeLCOWDoc(ctx context.Context, opts *OptionsLCOW, uvm *UtilityVM) (_ *hcs
 			NamedPipe: `\\.\pipe\vmpipe`,
 		},
 	}
-	kernelArgs = "8250_core.nr_uarts=1 8250_core.skip_txen_test=1 console=ttyS0,115200 pci=off nr_cpus=2 brd.rd_nr=0 pmtmr=0 quiet -- -e 1 /bin/gcs -v4 -log-format json -loglevel debug"
+	kernelArgs = "init=/init 8250_core.nr_uarts=1 8250_core.skip_txen_test=1 console=ttyS0,115200 pci=off nr_cpus=2 brd.rd_nr=0 pmtmr=0 printk.devkmsg=on -- -e 1 /bin/gcs -v4 -log-format json -loglevel debug"
 
 	if !opts.KernelDirect {
 		doc.VirtualMachine.Chipset.Uefi = &hcsschema.Uefi{
@@ -879,10 +879,10 @@ func CreateLCOW(ctx context.Context, opts *OptionsLCOW) (_ *UtilityVM, err error
 	if opts.ForwardStdout || opts.ForwardStderr {
 		uvm.outputHandler = opts.OutputHandlerCreator(opts.Options)
 		uvm.outputProcessingDone = make(chan struct{})
-		// uvm.outputListener, err = uvm.listenVsock(linuxLogVsockPort)
-		// if err != nil {
-		// 	return nil, err
-		// }
+		uvm.outputListener, err = uvm.listenVsock(linuxLogVsockPort)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if opts.UseGuestConnection {

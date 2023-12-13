@@ -44,6 +44,7 @@ import (
 	"github.com/Microsoft/hcsshim/internal/protocol/guestresource"
 	"github.com/Microsoft/hcsshim/internal/resources"
 	"github.com/Microsoft/hcsshim/internal/shimdiag"
+	"github.com/Microsoft/hcsshim/internal/state"
 	"github.com/Microsoft/hcsshim/internal/uvm"
 	"github.com/Microsoft/hcsshim/osversion"
 	"github.com/Microsoft/hcsshim/pkg/annotations"
@@ -1061,5 +1062,56 @@ func (ht *hcsTask) Save(ctx context.Context, path string) error {
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return err
 	}
+	if err := state.Write(filepath.Join(path, "config.json"), ht.taskSpec); err != nil {
+		return err
+	}
+	if err := ht.init.Save(ctx, filepath.Join(path, "init")); err != nil {
+		return err
+	}
 	return nil
+}
+
+func restoreHcsTask(ctx context.Context, events publisher, host *uvm.UtilityVM, path string, req *task.CreateTaskRequest, ownsParent bool, oldID string) (shimTask, error) {
+	io, err := cmd.NewUpstreamIO(ctx, req.ID, req.Stdout, req.Stderr, req.Stdin, req.Terminal, 0)
+	if err != nil {
+		return nil, err
+	}
+	container, err := host.RestoreContainer(ctx, oldID)
+	if err != nil {
+		return nil, err
+	}
+	spec, err := state.Read[specs.Spec](filepath.Join(path, "config.json"))
+	if err != nil {
+		return nil, err
+	}
+	ht := &hcsTask{
+		events:   events,
+		id:       req.ID,
+		c:        container,
+		ownsHost: ownsParent,
+		host:     host,
+		closed:   make(chan struct{}),
+		taskSpec: spec,
+		cr:       &resources.Resources{},
+	}
+	init, err := restoreHcsExec(
+		ctx,
+		events,
+		req.ID,
+		host,
+		container,
+		req.ID,
+		req.Bundle,
+		ht.isWCOW,
+		spec.Process,
+		io,
+		filepath.Join(path, "init"),
+	)
+	if err != nil {
+		return nil, err
+	}
+	ht.init = init
+	go ht.waitForHostExit()
+	go ht.waitInitExit()
+	return ht, nil
 }

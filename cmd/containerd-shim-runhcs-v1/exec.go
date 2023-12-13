@@ -83,6 +83,7 @@ type shimExec interface {
 	//
 	// `ForceExit` is safe to call in any `State()`.
 	ForceExit(ctx context.Context, status int)
+	Save(ctx context.Context, path string) error
 }
 
 func newExecInvalidStateError(tid, eid string, state shimExecState, op string) error {

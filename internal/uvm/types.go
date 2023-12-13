@@ -35,7 +35,8 @@ type namespaceInfo struct {
 
 // UtilityVM is the object used by clients representing a utility VM
 type UtilityVM struct {
-	config *hcsschema.ComputeSystem
+	firstPort uint32
+	config    *hcsschema.ComputeSystem
 
 	id               string               // Identifier for the utility VM (user supplied or generated)
 	runtimeID        guid.GUID            // Hyper-V VM ID

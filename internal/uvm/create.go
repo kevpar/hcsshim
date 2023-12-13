@@ -299,6 +299,13 @@ func (uvm *UtilityVM) CreateContainer(ctx context.Context, id string, settings i
 	return c, err
 }
 
+func (uvm *UtilityVM) RestoreContainer(ctx context.Context, id string) (cow.Container, error) {
+	if uvm.gc == nil {
+		return nil, fmt.Errorf("must have direct gc connection to restore")
+	}
+	return uvm.gc.RestoreContainer(ctx, id)
+}
+
 // CreateProcess creates a process in the utility VM.
 func (uvm *UtilityVM) CreateProcess(ctx context.Context, settings interface{}) (cow.Process, error) {
 	if uvm.gc != nil {

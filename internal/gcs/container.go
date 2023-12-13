@@ -5,6 +5,7 @@ package gcs
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	hcsschema "github.com/Microsoft/hcsshim/internal/hcs/schema2"
 	"github.com/Microsoft/hcsshim/internal/log"
 	"github.com/Microsoft/hcsshim/internal/oc"
+	"github.com/Microsoft/hcsshim/internal/state"
 	"go.opencensus.io/trace"
 )
 
@@ -59,6 +61,22 @@ func (gc *GuestConnection) CreateContainer(ctx context.Context, cid string, conf
 	}
 	var resp containerCreateResponse
 	err = gc.brdg.RPC(ctx, rpcCreate, &req, &resp, false)
+	if err != nil {
+		return nil, err
+	}
+	go c.waitBackground()
+	return c, nil
+}
+
+func (gc *GuestConnection) RestoreContainer(ctx context.Context, cid string) (*Container, error) {
+	c := &Container{
+		gc:        gc,
+		id:        cid,
+		notifyCh:  make(chan struct{}),
+		closeCh:   make(chan struct{}),
+		waitBlock: make(chan struct{}),
+	}
+	err := gc.requestNotify(cid, c.notifyCh)
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +133,47 @@ func (c *Container) CreateProcess(ctx context.Context, config interface{}) (_ co
 	span.AddAttributes(trace.StringAttribute("cid", c.id))
 
 	return c.gc.exec(ctx, c.id, config)
+}
+
+func (c *Container) RestoreProcess(ctx context.Context, path string) (cow.Process, error) {
+	s, err := state.Read[processState](filepath.Join(path, "state.json"))
+	if err != nil {
+		return nil, err
+	}
+	p := &Process{
+		gc:  c.gc,
+		cid: s.CID,
+		id:  s.PID,
+	}
+	if s.StdinPort != 0 {
+		p.stdin, err = c.gc.newIoChannelWithPort(s.StdinPort)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if s.StdoutPort != 0 {
+		p.stdout, err = c.gc.newIoChannelWithPort(s.StdoutPort)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if s.StderrPort != 0 {
+		p.stderr, err = c.gc.newIoChannelWithPort(s.StderrPort)
+		if err != nil {
+			return nil, err
+		}
+	}
+	waitReq := containerWaitForProcess{
+		requestBase: makeRequest(ctx, p.cid),
+		ProcessID:   p.id,
+		TimeoutInMs: 0xffffffff,
+	}
+	p.waitCall, err = c.gc.brdg.AsyncRPC(ctx, rpcWaitForProcess, &waitReq, &p.waitResp)
+	if err != nil {
+		return nil, err
+	}
+	go p.waitBackground()
+	return p, nil
 }
 
 // ID returns the container's ID.

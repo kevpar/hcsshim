@@ -4,6 +4,8 @@ package main
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -42,7 +44,8 @@ func newHcsExec(
 	id, bundle string,
 	isWCOW bool,
 	spec *specs.Process,
-	io cmd.UpstreamIO) shimExec {
+	io cmd.UpstreamIO,
+) shimExec {
 	log.G(ctx).WithFields(logrus.Fields{
 		"tid":    tid,
 		"eid":    id, // Init exec ID is always same as Task ID
@@ -67,6 +70,63 @@ func newHcsExec(
 	}
 	go he.waitForContainerExit()
 	return he
+}
+
+func restoreHcsExec(
+	ctx context.Context,
+	events publisher,
+	tid string,
+	host *uvm.UtilityVM,
+	c cow.Container,
+	id, bundle string,
+	isWCOW bool,
+	spec *specs.Process,
+	io cmd.UpstreamIO,
+	path string,
+) (shimExec, error) {
+	log.G(ctx).WithFields(logrus.Fields{
+		"tid":    tid,
+		"eid":    id, // Init exec ID is always same as Task ID
+		"bundle": bundle,
+		"wcow":   isWCOW,
+	}).Debug("restoreHcsExec")
+
+	he := &hcsExec{
+		events:      events,
+		tid:         tid,
+		host:        host,
+		c:           c,
+		id:          id,
+		bundle:      bundle,
+		isWCOW:      isWCOW,
+		spec:        spec,
+		io:          io,
+		processDone: make(chan struct{}),
+		state:       shimExecStateCreated,
+		exitStatus:  255, // By design for non-exited process status.
+		exited:      make(chan struct{}),
+		restore:     true,
+	}
+	p, err := cmd.RestoreCmd(ctx, filepath.Join(path, "cmd"), c, io)
+	if err != nil {
+		return nil, err
+	}
+	he.p = p
+	he.pid = he.p.Process.Pid()
+	he.state = shimExecStateRunning
+	go he.waitForContainerExit()
+	go he.waitForExit()
+	return he, nil
+}
+
+func (he *hcsExec) Save(ctx context.Context, path string) error {
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return err
+	}
+	if err := he.p.Save(ctx, filepath.Join(path, "cmd")); err != nil {
+		return err
+	}
+	return nil
 }
 
 var _ = (shimExec)(&hcsExec{})
@@ -127,6 +187,7 @@ type hcsExec struct {
 	// exited is a wait block which waits async for the process to exit.
 	exited     chan struct{}
 	exitedOnce sync.Once
+	restore    bool
 }
 
 func (he *hcsExec) ID() string {
@@ -177,6 +238,9 @@ func (he *hcsExec) Status() *task.StateResponse {
 func (he *hcsExec) startInternal(ctx context.Context, initializeContainer bool) (err error) {
 	he.sl.Lock()
 	defer he.sl.Unlock()
+	if he.restore {
+		return nil
+	}
 	if he.state != shimExecStateCreated {
 		return newExecInvalidStateError(he.tid, he.id, he.state, "start")
 	}
@@ -185,7 +249,7 @@ func (he *hcsExec) startInternal(ctx context.Context, initializeContainer bool) 
 			he.exitFromCreatedL(ctx, 1)
 		}
 	}()
-	if initializeContainer {
+	if !he.restore && initializeContainer {
 		err = he.c.Start(ctx)
 		if err != nil {
 			return err

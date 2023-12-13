@@ -67,13 +67,17 @@ type GuestConnectionConfig struct {
 }
 
 // Connect establishes a GCS connection. `gcc.Conn` will be closed by this function.
-func (gcc *GuestConnectionConfig) Connect(ctx context.Context, isColdStart bool) (_ *GuestConnection, err error) {
+func (gcc *GuestConnectionConfig) Connect(ctx context.Context, isColdStart bool, firstPort uint32) (_ *GuestConnection, err error) {
 	ctx, span := oc.StartSpan(ctx, "gcs::GuestConnectionConfig::Connect", oc.WithClientSpanKind)
 	defer span.End()
 	defer func() { oc.SetSpanStatus(span, err) }()
 
+	if firstPort == 0 {
+		firstPort = firstIoChannelVsockPort
+	}
+
 	gc := &GuestConnection{
-		nextPort:   firstIoChannelVsockPort,
+		nextPort:   firstPort,
 		notifyChs:  make(map[string]chan struct{}),
 		ioListenFn: gcc.IoListen,
 	}
@@ -103,6 +107,10 @@ type GuestConnection struct {
 }
 
 var _ cow.ProcessHost = &GuestConnection{}
+
+func (gc *GuestConnection) RestoreProcess(ctx context.Context, path string) (cow.Process, error) {
+	return nil, fmt.Errorf("not implemented")
+}
 
 // Capabilities returns the guest's declared capabilities.
 func (gc *GuestConnection) Capabilities() *schema1.GuestDefinedCapabilities {
@@ -233,6 +241,10 @@ func (gc *GuestConnection) IsOCI() bool {
 	return false
 }
 
+func (gc *GuestConnection) NextPort() uint32 {
+	return gc.nextPort
+}
+
 func (gc *GuestConnection) newIoChannel() (*ioChannel, uint32, error) {
 	gc.mu.Lock()
 	port := gc.nextPort
@@ -243,6 +255,16 @@ func (gc *GuestConnection) newIoChannel() (*ioChannel, uint32, error) {
 		return nil, 0, err
 	}
 	return newIoChannel(l), port, nil
+}
+
+func (gc *GuestConnection) newIoChannelWithPort(port uint32) (*ioChannel, error) {
+	gc.mu.Lock()
+	gc.mu.Unlock()
+	l, err := gc.ioListenFn(port)
+	if err != nil {
+		return nil, err
+	}
+	return newIoChannel(l), nil
 }
 
 func (gc *GuestConnection) requestNotify(cid string, ch chan struct{}) error {

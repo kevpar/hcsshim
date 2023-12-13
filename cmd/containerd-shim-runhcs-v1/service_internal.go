@@ -90,10 +90,11 @@ func (s *service) createInternal(ctx context.Context, req *task.CreateTaskReques
 		return nil, err
 	}
 	var restoreSpec struct {
-		Typ         string
-		Path        string
-		NetNS       string
-		ScratchPath string
+		Typ       string
+		Path      string
+		ID        string
+		NetNS     string
+		Resources map[string]string
 	}
 	if err := json.Unmarshal(rawSpec, &restoreSpec); err != nil {
 		return nil, err
@@ -178,9 +179,14 @@ func (s *service) createInternal(ctx context.Context, req *task.CreateTaskReques
 		if err == nil {
 			// The POD sandbox was previously created. Unlock and forward to the POD
 			s.cl.Unlock()
-			t, err := pod.CreateTask(ctx, req, &spec)
-			if err != nil {
-				return nil, err
+			var t shimTask
+			if restore {
+				t, err = pod.RestoreTask(ctx, restoreSpec.ID, "", s.events, req)
+			} else {
+				t, err = pod.CreateTask(ctx, req, &spec)
+				if err != nil {
+					return nil, err
+				}
 			}
 			e, _ := t.GetExec("")
 			resp.Pid = uint32(e.Pid())
@@ -191,7 +197,7 @@ func (s *service) createInternal(ctx context.Context, req *task.CreateTaskReques
 				ctx,
 				filepath.Join(restoreSpec.Path, "sandbox"),
 				restoreSpec.NetNS,
-				restoreSpec.ScratchPath,
+				restoreSpec.Resources,
 				s.events,
 				req,
 			)

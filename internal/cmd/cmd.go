@@ -7,6 +7,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -122,6 +124,91 @@ func Command(host cow.ProcessHost, name string, arg ...string) *Cmd {
 		cmd.Spec.Env = []string{"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}
 	}
 	return cmd
+}
+
+func (c *Cmd) Save(ctx context.Context, path string) error {
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return err
+	}
+	if err := c.Process.Save(ctx, filepath.Join(path, "process")); err != nil {
+		return err
+	}
+	return nil
+}
+
+func RestoreCmd(ctx context.Context, path string, host cow.ProcessHost, io UpstreamIO) (*Cmd, error) {
+	c := &Cmd{
+		Host:                 host,
+		Stdin:                io.Stdin(),
+		Stdout:               io.Stdout(),
+		Stderr:               io.Stderr(),
+		CopyAfterExitTimeout: 1 * time.Second,
+		allDoneCh:            make(chan struct{}),
+	}
+	p, err := host.RestoreProcess(ctx, filepath.Join(path, "process"))
+	if err != nil {
+		return nil, err
+	}
+	c.Process = p
+
+	stdin, stdout, stderr := p.Stdio()
+	if c.Stdin != nil {
+		// Do not make stdin part of the error group because there is no way for
+		// us or the caller to reliably unblock the c.Stdin read when the
+		// process exits.
+		go func() {
+			_, err := relayIO(stdin, c.Stdin, c.Log, "stdin")
+			// Report the stdin copy error. If the process has exited, then the
+			// caller may never see it, but if the error was due to a failure in
+			// stdin read, then it is likely the process is still running.
+			if err != nil {
+				c.stdinErr.Store(err)
+			}
+			// Notify the process that there is no more input.
+			if err := p.CloseStdin(context.TODO()); err != nil && c.Log != nil {
+				c.Log.WithError(err).Warn("failed to close Cmd stdin")
+			}
+		}()
+	}
+
+	if c.Stdout != nil {
+		c.iogrp.Go(func() error {
+			_, err := relayIO(c.Stdout, stdout, c.Log, "stdout")
+			if err := p.CloseStdout(context.TODO()); err != nil {
+				c.Log.WithError(err).Warn("failed to close Cmd stdout")
+			}
+			return err
+		})
+	}
+
+	if c.Stderr != nil {
+		c.iogrp.Go(func() error {
+			_, err := relayIO(c.Stderr, stderr, c.Log, "stderr")
+			if err := p.CloseStderr(context.TODO()); err != nil {
+				c.Log.WithError(err).Warn("failed to close Cmd stderr")
+			}
+			return err
+		})
+	}
+
+	if c.Context != nil {
+		go func() {
+			select {
+			case <-c.Context.Done():
+				// Process.Kill (via Process.Signal) will not send an RPC if the
+				// provided context in is cancelled (bridge.AsyncRPC will end early)
+				ctx := c.Context
+				if ctx == nil {
+					ctx = context.Background()
+				}
+				kctx := log.Copy(context.Background(), ctx)
+				_, _ = c.Process.Kill(kctx)
+			case <-c.allDoneCh:
+			}
+		}()
+	}
+
+	return c, nil
 }
 
 // CommandContext makes a Cmd for a given command and arguments. After

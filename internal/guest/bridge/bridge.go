@@ -189,6 +189,25 @@ type Bridge struct {
 	hasQuitPending uint32
 
 	protVer prot.ProtocolVersion
+
+	Publisher *Publisher
+}
+
+type Publisher struct {
+	b *Bridge
+	m sync.Mutex
+}
+
+func (p *Publisher) SetBridge(b *Bridge) {
+	p.m.Lock()
+	defer p.m.Unlock()
+	p.b = b
+}
+
+func (p *Publisher) PublishNotification(n *prot.ContainerNotification) {
+	p.m.Lock()
+	defer p.m.Unlock()
+	p.b.PublishNotification(n)
 }
 
 // AssignHandlers creates and assigns the appropriate bridge
