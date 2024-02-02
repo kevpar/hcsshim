@@ -17,12 +17,15 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	runhcsopts "github.com/Microsoft/hcsshim/cmd/containerd-shim-runhcs-v1/options"
 	"github.com/Microsoft/hcsshim/internal/extendedtask"
+	"github.com/Microsoft/hcsshim/internal/layers"
 	"github.com/Microsoft/hcsshim/internal/oci"
+	"github.com/Microsoft/hcsshim/internal/save"
 	"github.com/Microsoft/hcsshim/internal/shimdiag"
 )
 
@@ -94,7 +97,7 @@ func (s *service) createInternal(ctx context.Context, req *task.CreateTaskReques
 		Path      string
 		ID        string
 		NetNS     string
-		Resources map[string]string
+		Resources []byte
 	}
 	if err := json.Unmarshal(rawSpec, &restoreSpec); err != nil {
 		return nil, err
@@ -134,7 +137,7 @@ func (s *service) createInternal(ctx context.Context, req *task.CreateTaskReques
 		if spec.Windows != nil {
 			layerFolders = spec.Windows.LayerFolders
 		}
-		if err := validateRootfsAndLayers(req.Rootfs, layerFolders); err != nil {
+		if err := layers.ValidateRootfsAndLayers(req.Rootfs, layerFolders); err != nil {
 			return nil, err
 		}
 
@@ -149,7 +152,7 @@ func (s *service) createInternal(ctx context.Context, req *task.CreateTaskReques
 				return nil, fmt.Errorf("unsupported Windows mount type: %s", m.Type)
 			}
 
-			source, parentLayerPaths, err := parseLegacyRootfsMount(m)
+			source, parentLayerPaths, err := layers.ParseLegacyRootfsMount(m)
 			if err != nil {
 				return nil, err
 			}
@@ -193,11 +196,16 @@ func (s *service) createInternal(ctx context.Context, req *task.CreateTaskReques
 			return resp, nil
 		}
 		if restore {
+			rSpec := &save.RestoreSpec{}
+			err = proto.UnmarshalOptions{}.Unmarshal(restoreSpec.Resources, rSpec)
+			if err != nil {
+				return nil, err
+			}
 			pod, err = restorePod(
 				ctx,
 				filepath.Join(restoreSpec.Path, "sandbox"),
 				restoreSpec.NetNS,
-				restoreSpec.Resources,
+				rSpec,
 				s.events,
 				req,
 			)

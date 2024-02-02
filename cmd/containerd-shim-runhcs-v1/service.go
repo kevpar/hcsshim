@@ -547,10 +547,10 @@ func (s *service) StartSave(ctx context.Context, req *save.StartSaveRequest) (*s
 	span.AddAttributes(trace.StringAttribute("sandboxID", req.PodId))
 	span.AddAttributes(trace.StringAttribute("path", req.Path))
 
-	err := s.startSave(ctx, req.Path)
+	resources, err := s.startSave(ctx, req.Path)
 	s.savePath = req.Path
 
-	return &save.StartSaveResponse{}, errdefs.ToGRPC(err)
+	return &save.StartSaveResponse{Resources: resources}, errdefs.ToGRPC(err)
 }
 
 func (s *service) CompleteSave(ctx context.Context, req *save.CompleteSaveRequest) (*save.CompleteSaveResponse, error) {

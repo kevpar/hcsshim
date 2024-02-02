@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/Microsoft/go-winio/pkg/guid"
 	"github.com/Microsoft/hcsshim/hcn"
 	"github.com/Microsoft/hcsshim/internal/cow"
 	"github.com/Microsoft/hcsshim/internal/gcs"
@@ -177,29 +176,29 @@ func (uvm *UtilityVM) StartSave(ctx context.Context, path string) error {
 		return err
 	}
 
-	resources := make(map[string]Resource)
-	for controllerID, attachments := range uvm.config.VirtualMachine.Devices.Scsi {
-		for lun, att := range attachments.Attachments {
-			if att.ReadOnly {
-				continue
-			}
-			r := Resource{
-				SCSIDisk: &SCSIDisk{
-					Controller: controllerID,
-					LUN:        lun,
-					Path:       att.Path,
-				},
-			}
-			g, err := guid.NewV4()
-			if err != nil {
-				return err
-			}
-			resources[g.String()] = r
-		}
-	}
-	if err := statepkg.Write(filepath.Join(path, "resources.json"), &resources); err != nil {
-		return err
-	}
+	// resources := make(map[string]Resource)
+	// for controllerID, attachments := range uvm.config.VirtualMachine.Devices.Scsi {
+	// 	for lun, att := range attachments.Attachments {
+	// 		if att.ReadOnly {
+	// 			continue
+	// 		}
+	// 		r := Resource{
+	// 			SCSIDisk: &SCSIDisk{
+	// 				Controller: controllerID,
+	// 				LUN:        lun,
+	// 				Path:       att.Path,
+	// 			},
+	// 		}
+	// 		g, err := guid.NewV4()
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 		resources[g.String()] = r
+	// 	}
+	// }
+	// if err := statepkg.Write(filepath.Join(path, "resources.json"), &resources); err != nil {
+	// 	return err
+	// }
 
 	return nil
 }
@@ -224,7 +223,22 @@ type Resource struct {
 	SCSIDisk *SCSIDisk
 }
 
-func RestoreUVM(ctx context.Context, path string, netNS string, resources map[string]string, id string) (*UtilityVM, error) {
+type RestoreSCSI struct {
+	Origin OriginSCSIDisk
+	Path   string
+}
+
+type Edit struct {
+	// what goes here?
+	// do we use RestoreSCSI?
+	// who maps from container (rootfs) -> vm (scsi disk) domain?
+	// how does this work with Amit's refactoring?
+	Controller string
+	LUN        string
+	Path       string
+}
+
+func RestoreUVM(ctx context.Context, path string, netNS string, id string, edits []*Edit) (*UtilityVM, error) {
 	state, err := statepkg.Read[uvmState](filepath.Join(path, "state.json"))
 	if err != nil {
 		return nil, err
@@ -282,26 +296,34 @@ func RestoreUVM(ctx context.Context, path string, netNS string, resources map[st
 		}
 	}
 
-	oldResources, err := statepkg.Read[map[string]Resource](filepath.Join(path, "resources.json"))
-	if err != nil {
-		return nil, err
-	}
-	finalResources := *oldResources
-	for id, p := range resources {
-		r := finalResources[id]
-		r.SCSIDisk.Path = p
-		finalResources[id] = r
-	}
-	for _, r := range finalResources {
-		if scsi := r.SCSIDisk; scsi != nil {
-			att := config.VirtualMachine.Devices.Scsi[scsi.Controller].Attachments[scsi.LUN]
-			att.Path = scsi.Path
-			config.VirtualMachine.Devices.Scsi[scsi.Controller].Attachments[scsi.LUN] = att
-			if err := wclayer.GrantVmAccess(ctx, fmt.Sprintf("%s@vm", id), scsi.Path); err != nil {
-				return nil, err
-			}
+	for _, e := range edits {
+		att := config.VirtualMachine.Devices.Scsi[e.Controller].Attachments[e.LUN]
+		att.Path = e.Path
+		config.VirtualMachine.Devices.Scsi[e.Controller].Attachments[e.LUN] = att
+		if err := wclayer.GrantVmAccess(ctx, fmt.Sprintf("%s@vm", id), e.Path); err != nil {
+			return nil, err
 		}
 	}
+	// oldResources, err := statepkg.Read[map[string]Resource](filepath.Join(path, "resources.json"))
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// finalResources := *oldResources
+	// for id, p := range resources {
+	// 	r := finalResources[id]
+	// 	r.SCSIDisk.Path = p
+	// 	finalResources[id] = r
+	// }
+	// for _, r := range finalResources {
+	// 	if scsi := r.SCSIDisk; scsi != nil {
+	// 		att := config.VirtualMachine.Devices.Scsi[scsi.Controller].Attachments[scsi.LUN]
+	// 		att.Path = scsi.Path
+	// 		config.VirtualMachine.Devices.Scsi[scsi.Controller].Attachments[scsi.LUN] = att
+	// 		if err := wclayer.GrantVmAccess(ctx, fmt.Sprintf("%s@vm", id), scsi.Path); err != nil {
+	// 			return nil, err
+	// 		}
+	// 	}
+	// }
 	// // Scratch disk
 	// type disk struct {
 	// 	controller string

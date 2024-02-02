@@ -1,4 +1,4 @@
-package main
+package layers
 
 import (
 	"encoding/json"
@@ -6,18 +6,17 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Microsoft/hcsshim/internal/layers"
 	"github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/mount"
 )
 
-// validateRootfsAndLayers checks to ensure we have appropriate information
+// ValidateRootfsAndLayers checks to ensure we have appropriate information
 // for setting up the container's root filesystem. It ensures the following:
 // - One and only one of Rootfs or LayerFolders can be provided.
 // - If LayerFolders are provided, there are at least two entries.
 // - If Rootfs is provided, there is a single entry and it does not have a Target set.
-func validateRootfsAndLayers(rootfs []*types.Mount, layerFolders []string) error {
+func ValidateRootfsAndLayers(rootfs []*types.Mount, layerFolders []string) error {
 	if len(rootfs) > 0 && len(layerFolders) > 0 {
 		return fmt.Errorf("cannot pass both a rootfs mount and Windows.LayerFolders: %w", errdefs.ErrFailedPrecondition)
 	}
@@ -44,14 +43,14 @@ func validateRootfsAndLayers(rootfs []*types.Mount, layerFolders []string) error
 	return nil
 }
 
-// parseLegacyRootfsMount parses the rootfs mount format that we have traditionally
+// ParseLegacyRootfsMount parses the rootfs mount format that we have traditionally
 // used for both Linux and Windows containers.
 // The mount format consists of:
 //   - The scratch folder path in m.Source, which contains sandbox.vhdx.
 //   - A mount option in the form parentLayerPaths=<JSON>, where JSON is an array of
 //     string paths to read-only layer directories. The exact contents of these layer
 //     directories are intepreteted differently for Linux and Windows containers.
-func parseLegacyRootfsMount(m *types.Mount) (string, []string, error) {
+func ParseLegacyRootfsMount(m *types.Mount) (string, []string, error) {
 	// parentLayerPaths are passed in layerN, layerN-1, ..., layer 0
 	//
 	// The OCI spec expects:
@@ -71,23 +70,23 @@ func parseLegacyRootfsMount(m *types.Mount) (string, []string, error) {
 	return m.Source, parentLayerPaths, nil
 }
 
-// getLCOWLayers returns a layers.LCOWLayers describing the rootfs that should be set up
+// getLCOWLayers returns a LCOWLayers describing the rootfs that should be set up
 // for an LCOW container. It takes as input the set of rootfs mounts and the layer folders
 // from the OCI spec, it is assumed that these were previously checked with validateRootfsAndLayers
 // such that only one of them is populated.
-func getLCOWLayers(rootfs []*types.Mount, layerFolders []string) (*layers.LCOWLayers, error) {
-	legacyLayer := func(scratchLayer string, parentLayers []string) *layers.LCOWLayers {
+func GetLCOWLayers(rootfs []*types.Mount, layerFolders []string) (*LCOWLayers, error) {
+	legacyLayer := func(scratchLayer string, parentLayers []string) *LCOWLayers {
 		// Each read-only layer should have a layer.vhd, and the scratch layer should have a sandbox.vhdx.
-		roLayers := make([]*layers.LCOWLayer, 0, len(parentLayers))
+		roLayers := make([]*LCOWLayer, 0, len(parentLayers))
 		for _, parentLayer := range parentLayers {
 			roLayers = append(
 				roLayers,
-				&layers.LCOWLayer{
+				&LCOWLayer{
 					VHDPath: filepath.Join(parentLayer, "layer.vhd"),
 				},
 			)
 		}
-		return &layers.LCOWLayers{
+		return &LCOWLayers{
 			Layers:         roLayers,
 			ScratchVHDPath: filepath.Join(scratchLayer, "sandbox.vhdx"),
 		}
@@ -100,7 +99,7 @@ func getLCOWLayers(rootfs []*types.Mount, layerFolders []string) (*layers.LCOWLa
 	m := rootfs[0]
 	switch m.Type {
 	case "lcow-layer":
-		scratchLayer, parentLayers, err := parseLegacyRootfsMount(rootfs[0])
+		scratchLayer, parentLayers, err := ParseLegacyRootfsMount(rootfs[0])
 		if err != nil {
 			return nil, err
 		}
@@ -125,17 +124,17 @@ func getLCOWLayers(rootfs []*types.Mount, layerFolders []string) (*layers.LCOWLa
 				return nil, fmt.Errorf("unrecognized %s mount option: %s", m.Type, opt)
 			}
 		}
-		roLayers := make([]*layers.LCOWLayer, 0, len(layerData))
+		roLayers := make([]*LCOWLayer, 0, len(layerData))
 		for _, layer := range layerData {
 			roLayers = append(
 				roLayers,
-				&layers.LCOWLayer{
+				&LCOWLayer{
 					VHDPath:   layer.Path,
 					Partition: layer.Partition,
 				},
 			)
 		}
-		return &layers.LCOWLayers{Layers: roLayers, ScratchVHDPath: scratchPath}, nil
+		return &LCOWLayers{Layers: roLayers, ScratchVHDPath: scratchPath}, nil
 	default:
 		return nil, fmt.Errorf("unrecognized rootfs mount type: %s", m.Type)
 	}

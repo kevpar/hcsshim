@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/Microsoft/go-winio/pkg/fs"
@@ -90,6 +91,8 @@ func MountLCOWLayers(ctx context.Context, containerID string, layers *LCOWLayers
 		return "", "", nil, errors.New("MountLCOWLayers should only be called for LCOW")
 	}
 
+	o := &uvm.OriginRootFS{}
+
 	// V2 UVM
 	log.G(ctx).WithField("os", vm.OS()).Debug("hcsshim::MountLCOWLayers V2 UVM")
 
@@ -107,9 +110,9 @@ func MountLCOWLayers(ctx context.Context, containerID string, layers *LCOWLayers
 		}
 	}()
 
-	for _, layer := range layers.Layers {
+	for i, layer := range layers.Layers {
 		log.G(ctx).WithField("layerPath", layer.VHDPath).Debug("mounting layer")
-		uvmPath, closer, err := addLCOWLayer(ctx, vm, layer)
+		uvmPath, closer, err := addLCOWLayer(ctx, vm, layer, o, i)
 		if err != nil {
 			return "", "", nil, fmt.Errorf("failed to add LCOW layer: %s", err)
 		}
@@ -145,6 +148,11 @@ func MountLCOWLayers(ctx context.Context, containerID string, layers *LCOWLayers
 	if err != nil {
 		return "", "", nil, fmt.Errorf("failed to add SCSI scratch VHD: %s", err)
 	}
+	o.ScratchPath = uvm.OriginSCSIDisk{Controller: strconv.Itoa(int(scsiMount.Controller())), LUN: strconv.Itoa(int(scsiMount.LUN()))}
+	if vm.RootFSOrigins == nil {
+		vm.RootFSOrigins = make(map[string]*uvm.OriginRootFS)
+	}
+	vm.RootFSOrigins[containerID] = o
 
 	// handles the case where we want to share a scratch disk for multiple containers instead
 	// of mounting a new one. Pass a unique value for `ScratchPath` to avoid container upper and
@@ -401,7 +409,7 @@ func mountWCOWIsolatedLayers(ctx context.Context, containerID string, layerFolde
 	return containerScratchPathInUVM, closer, nil
 }
 
-func addLCOWLayer(ctx context.Context, vm *uvm.UtilityVM, layer *LCOWLayer) (uvmPath string, _ resources.ResourceCloser, err error) {
+func addLCOWLayer(ctx context.Context, vm *uvm.UtilityVM, layer *LCOWLayer, o *uvm.OriginRootFS, i int) (uvmPath string, _ resources.ResourceCloser, err error) {
 	// Don't add as VPMEM when we want additional devices on the UVM to be fully physically backed.
 	// Also don't use VPMEM when we need to mount a specific partition of the disk, as this is only
 	// supported for SCSI.
@@ -433,6 +441,7 @@ func addLCOWLayer(ctx context.Context, vm *uvm.UtilityVM, layer *LCOWLayer) (uvm
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to add SCSI layer: %s", err)
 	}
+	o.ParentPaths = append(o.ParentPaths, uvm.OriginSCSIDisk{Controller: strconv.Itoa(int(sm.Controller())), LUN: strconv.Itoa(int(sm.LUN()))})
 	log.G(ctx).WithFields(logrus.Fields{
 		"layerPath":      layer.VHDPath,
 		"layerPartition": layer.Partition,

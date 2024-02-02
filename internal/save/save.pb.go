@@ -2,11 +2,12 @@
 // versions:
 // 	protoc-gen-go v1.28.1
 // 	protoc        v3.21.12
-// source: dev.azure.com/msazure/ContainerPlatform/_git/azcri.git/api/save/save.proto
+// source: github.com/Microsoft/hcsshim/internal/save/save.proto
 
 package save
 
 import (
+	types "github.com/containerd/containerd/api/types"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -32,7 +33,7 @@ type StartSaveRequest struct {
 func (x *StartSaveRequest) Reset() {
 	*x = StartSaveRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_msgTypes[0]
+		mi := &file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[0]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -45,7 +46,7 @@ func (x *StartSaveRequest) String() string {
 func (*StartSaveRequest) ProtoMessage() {}
 
 func (x *StartSaveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_msgTypes[0]
+	mi := &file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[0]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58,7 +59,7 @@ func (x *StartSaveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartSaveRequest.ProtoReflect.Descriptor instead.
 func (*StartSaveRequest) Descriptor() ([]byte, []int) {
-	return file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_rawDescGZIP(), []int{0}
+	return file_github_com_Microsoft_hcsshim_internal_save_save_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *StartSaveRequest) GetPodId() string {
@@ -79,12 +80,14 @@ type StartSaveResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
+
+	Resources []*SaveResource `protobuf:"bytes,1,rep,name=resources,proto3" json:"resources,omitempty"`
 }
 
 func (x *StartSaveResponse) Reset() {
 	*x = StartSaveResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_msgTypes[1]
+		mi := &file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[1]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -97,7 +100,7 @@ func (x *StartSaveResponse) String() string {
 func (*StartSaveResponse) ProtoMessage() {}
 
 func (x *StartSaveResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_msgTypes[1]
+	mi := &file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[1]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -110,7 +113,14 @@ func (x *StartSaveResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartSaveResponse.ProtoReflect.Descriptor instead.
 func (*StartSaveResponse) Descriptor() ([]byte, []int) {
-	return file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_rawDescGZIP(), []int{1}
+	return file_github_com_Microsoft_hcsshim_internal_save_save_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *StartSaveResponse) GetResources() []*SaveResource {
+	if x != nil {
+		return x.Resources
+	}
+	return nil
 }
 
 type CompleteSaveRequest struct {
@@ -124,7 +134,7 @@ type CompleteSaveRequest struct {
 func (x *CompleteSaveRequest) Reset() {
 	*x = CompleteSaveRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_msgTypes[2]
+		mi := &file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[2]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -137,7 +147,7 @@ func (x *CompleteSaveRequest) String() string {
 func (*CompleteSaveRequest) ProtoMessage() {}
 
 func (x *CompleteSaveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_msgTypes[2]
+	mi := &file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[2]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -150,7 +160,7 @@ func (x *CompleteSaveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteSaveRequest.ProtoReflect.Descriptor instead.
 func (*CompleteSaveRequest) Descriptor() ([]byte, []int) {
-	return file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_rawDescGZIP(), []int{2}
+	return file_github_com_Microsoft_hcsshim_internal_save_save_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *CompleteSaveRequest) GetPodId() string {
@@ -169,7 +179,7 @@ type CompleteSaveResponse struct {
 func (x *CompleteSaveResponse) Reset() {
 	*x = CompleteSaveResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_msgTypes[3]
+		mi := &file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -182,7 +192,7 @@ func (x *CompleteSaveResponse) String() string {
 func (*CompleteSaveResponse) ProtoMessage() {}
 
 func (x *CompleteSaveResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_msgTypes[3]
+	mi := &file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -195,86 +205,421 @@ func (x *CompleteSaveResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteSaveResponse.ProtoReflect.Descriptor instead.
 func (*CompleteSaveResponse) Descriptor() ([]byte, []int) {
-	return file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_rawDescGZIP(), []int{3}
+	return file_github_com_Microsoft_hcsshim_internal_save_save_proto_rawDescGZIP(), []int{3}
 }
 
-var File_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto protoreflect.FileDescriptor
+type SaveResource struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
 
-var file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_rawDesc = []byte{
-	0x0a, 0x4a, 0x64, 0x65, 0x76, 0x2e, 0x61, 0x7a, 0x75, 0x72, 0x65, 0x2e, 0x63, 0x6f, 0x6d, 0x2f,
-	0x6d, 0x73, 0x61, 0x7a, 0x75, 0x72, 0x65, 0x2f, 0x43, 0x6f, 0x6e, 0x74, 0x61, 0x69, 0x6e, 0x65,
-	0x72, 0x50, 0x6c, 0x61, 0x74, 0x66, 0x6f, 0x72, 0x6d, 0x2f, 0x5f, 0x67, 0x69, 0x74, 0x2f, 0x61,
-	0x7a, 0x63, 0x72, 0x69, 0x2e, 0x67, 0x69, 0x74, 0x2f, 0x61, 0x70, 0x69, 0x2f, 0x73, 0x61, 0x76,
-	0x65, 0x2f, 0x73, 0x61, 0x76, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x19, 0x63, 0x6f,
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// Types that are assignable to Data:
+	//
+	//	*SaveResource_Rootfs
+	Data isSaveResource_Data `protobuf_oneof:"data"`
+}
+
+func (x *SaveResource) Reset() {
+	*x = SaveResource{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[4]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *SaveResource) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveResource) ProtoMessage() {}
+
+func (x *SaveResource) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[4]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveResource.ProtoReflect.Descriptor instead.
+func (*SaveResource) Descriptor() ([]byte, []int) {
+	return file_github_com_Microsoft_hcsshim_internal_save_save_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *SaveResource) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (m *SaveResource) GetData() isSaveResource_Data {
+	if m != nil {
+		return m.Data
+	}
+	return nil
+}
+
+func (x *SaveResource) GetRootfs() *SaveRootFS {
+	if x, ok := x.GetData().(*SaveResource_Rootfs); ok {
+		return x.Rootfs
+	}
+	return nil
+}
+
+type isSaveResource_Data interface {
+	isSaveResource_Data()
+}
+
+type SaveResource_Rootfs struct {
+	Rootfs *SaveRootFS `protobuf:"bytes,2,opt,name=rootfs,proto3,oneof"`
+}
+
+func (*SaveResource_Rootfs) isSaveResource_Data() {}
+
+type SaveRootFS struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	ContainerId string `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+}
+
+func (x *SaveRootFS) Reset() {
+	*x = SaveRootFS{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[5]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *SaveRootFS) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveRootFS) ProtoMessage() {}
+
+func (x *SaveRootFS) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[5]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveRootFS.ProtoReflect.Descriptor instead.
+func (*SaveRootFS) Descriptor() ([]byte, []int) {
+	return file_github_com_Microsoft_hcsshim_internal_save_save_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SaveRootFS) GetContainerId() string {
+	if x != nil {
+		return x.ContainerId
+	}
+	return ""
+}
+
+type RestoreSpec struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Resources []*RestoreResource `protobuf:"bytes,1,rep,name=resources,proto3" json:"resources,omitempty"`
+}
+
+func (x *RestoreSpec) Reset() {
+	*x = RestoreSpec{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[6]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RestoreSpec) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RestoreSpec) ProtoMessage() {}
+
+func (x *RestoreSpec) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[6]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RestoreSpec.ProtoReflect.Descriptor instead.
+func (*RestoreSpec) Descriptor() ([]byte, []int) {
+	return file_github_com_Microsoft_hcsshim_internal_save_save_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *RestoreSpec) GetResources() []*RestoreResource {
+	if x != nil {
+		return x.Resources
+	}
+	return nil
+}
+
+type RestoreResource struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// Types that are assignable to Data:
+	//
+	//	*RestoreResource_Rootfs
+	Data isRestoreResource_Data `protobuf_oneof:"data"`
+}
+
+func (x *RestoreResource) Reset() {
+	*x = RestoreResource{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[7]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RestoreResource) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RestoreResource) ProtoMessage() {}
+
+func (x *RestoreResource) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[7]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RestoreResource.ProtoReflect.Descriptor instead.
+func (*RestoreResource) Descriptor() ([]byte, []int) {
+	return file_github_com_Microsoft_hcsshim_internal_save_save_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *RestoreResource) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (m *RestoreResource) GetData() isRestoreResource_Data {
+	if m != nil {
+		return m.Data
+	}
+	return nil
+}
+
+func (x *RestoreResource) GetRootfs() *RestoreRootFS {
+	if x, ok := x.GetData().(*RestoreResource_Rootfs); ok {
+		return x.Rootfs
+	}
+	return nil
+}
+
+type isRestoreResource_Data interface {
+	isRestoreResource_Data()
+}
+
+type RestoreResource_Rootfs struct {
+	Rootfs *RestoreRootFS `protobuf:"bytes,2,opt,name=rootfs,proto3,oneof"`
+}
+
+func (*RestoreResource_Rootfs) isRestoreResource_Data() {}
+
+type RestoreRootFS struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Mount *types.Mount `protobuf:"bytes,1,opt,name=mount,proto3" json:"mount,omitempty"`
+}
+
+func (x *RestoreRootFS) Reset() {
+	*x = RestoreRootFS{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[8]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RestoreRootFS) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RestoreRootFS) ProtoMessage() {}
+
+func (x *RestoreRootFS) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[8]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RestoreRootFS.ProtoReflect.Descriptor instead.
+func (*RestoreRootFS) Descriptor() ([]byte, []int) {
+	return file_github_com_Microsoft_hcsshim_internal_save_save_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *RestoreRootFS) GetMount() *types.Mount {
+	if x != nil {
+		return x.Mount
+	}
+	return nil
+}
+
+var File_github_com_Microsoft_hcsshim_internal_save_save_proto protoreflect.FileDescriptor
+
+var file_github_com_Microsoft_hcsshim_internal_save_save_proto_rawDesc = []byte{
+	0x0a, 0x35, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4d, 0x69, 0x63,
+	0x72, 0x6f, 0x73, 0x6f, 0x66, 0x74, 0x2f, 0x68, 0x63, 0x73, 0x73, 0x68, 0x69, 0x6d, 0x2f, 0x69,
+	0x6e, 0x74, 0x65, 0x72, 0x6e, 0x61, 0x6c, 0x2f, 0x73, 0x61, 0x76, 0x65, 0x2f, 0x73, 0x61, 0x76,
+	0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x19, 0x63, 0x6f, 0x6e, 0x74, 0x61, 0x69, 0x6e,
+	0x65, 0x72, 0x64, 0x2e, 0x72, 0x75, 0x6e, 0x68, 0x63, 0x73, 0x2e, 0x76, 0x31, 0x2e, 0x64, 0x69,
+	0x61, 0x67, 0x1a, 0x36, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x63,
+	0x6f, 0x6e, 0x74, 0x61, 0x69, 0x6e, 0x65, 0x72, 0x64, 0x2f, 0x63, 0x6f, 0x6e, 0x74, 0x61, 0x69,
+	0x6e, 0x65, 0x72, 0x64, 0x2f, 0x61, 0x70, 0x69, 0x2f, 0x74, 0x79, 0x70, 0x65, 0x73, 0x2f, 0x6d,
+	0x6f, 0x75, 0x6e, 0x74, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x22, 0x3d, 0x0a, 0x10, 0x53, 0x74,
+	0x61, 0x72, 0x74, 0x53, 0x61, 0x76, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x15,
+	0x0a, 0x06, 0x70, 0x6f, 0x64, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05,
+	0x70, 0x6f, 0x64, 0x49, 0x64, 0x12, 0x12, 0x0a, 0x04, 0x70, 0x61, 0x74, 0x68, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x04, 0x70, 0x61, 0x74, 0x68, 0x22, 0x5a, 0x0a, 0x11, 0x53, 0x74, 0x61,
+	0x72, 0x74, 0x53, 0x61, 0x76, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x45,
+	0x0a, 0x09, 0x72, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28,
+	0x0b, 0x32, 0x27, 0x2e, 0x63, 0x6f, 0x6e, 0x74, 0x61, 0x69, 0x6e, 0x65, 0x72, 0x64, 0x2e, 0x72,
+	0x75, 0x6e, 0x68, 0x63, 0x73, 0x2e, 0x76, 0x31, 0x2e, 0x64, 0x69, 0x61, 0x67, 0x2e, 0x53, 0x61,
+	0x76, 0x65, 0x52, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x52, 0x09, 0x72, 0x65, 0x73, 0x6f,
+	0x75, 0x72, 0x63, 0x65, 0x73, 0x22, 0x2c, 0x0a, 0x13, 0x43, 0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74,
+	0x65, 0x53, 0x61, 0x76, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x15, 0x0a, 0x06,
+	0x70, 0x6f, 0x64, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x70, 0x6f,
+	0x64, 0x49, 0x64, 0x22, 0x16, 0x0a, 0x14, 0x43, 0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x53,
+	0x61, 0x76, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x67, 0x0a, 0x0c, 0x53,
+	0x61, 0x76, 0x65, 0x52, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x12, 0x0e, 0x0a, 0x02, 0x69,
+	0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x12, 0x3f, 0x0a, 0x06, 0x72,
+	0x6f, 0x6f, 0x74, 0x66, 0x73, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x25, 0x2e, 0x63, 0x6f,
 	0x6e, 0x74, 0x61, 0x69, 0x6e, 0x65, 0x72, 0x64, 0x2e, 0x72, 0x75, 0x6e, 0x68, 0x63, 0x73, 0x2e,
-	0x76, 0x31, 0x2e, 0x64, 0x69, 0x61, 0x67, 0x22, 0x3d, 0x0a, 0x10, 0x53, 0x74, 0x61, 0x72, 0x74,
-	0x53, 0x61, 0x76, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x15, 0x0a, 0x06, 0x70,
-	0x6f, 0x64, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x70, 0x6f, 0x64,
-	0x49, 0x64, 0x12, 0x12, 0x0a, 0x04, 0x70, 0x61, 0x74, 0x68, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09,
-	0x52, 0x04, 0x70, 0x61, 0x74, 0x68, 0x22, 0x13, 0x0a, 0x11, 0x53, 0x74, 0x61, 0x72, 0x74, 0x53,
-	0x61, 0x76, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x2c, 0x0a, 0x13, 0x43,
-	0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x53, 0x61, 0x76, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65,
-	0x73, 0x74, 0x12, 0x15, 0x0a, 0x06, 0x70, 0x6f, 0x64, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x05, 0x70, 0x6f, 0x64, 0x49, 0x64, 0x22, 0x16, 0x0a, 0x14, 0x43, 0x6f, 0x6d,
-	0x70, 0x6c, 0x65, 0x74, 0x65, 0x53, 0x61, 0x76, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
-	0x65, 0x32, 0xdf, 0x01, 0x0a, 0x04, 0x53, 0x61, 0x76, 0x65, 0x12, 0x66, 0x0a, 0x09, 0x53, 0x74,
-	0x61, 0x72, 0x74, 0x53, 0x61, 0x76, 0x65, 0x12, 0x2b, 0x2e, 0x63, 0x6f, 0x6e, 0x74, 0x61, 0x69,
+	0x76, 0x31, 0x2e, 0x64, 0x69, 0x61, 0x67, 0x2e, 0x53, 0x61, 0x76, 0x65, 0x52, 0x6f, 0x6f, 0x74,
+	0x46, 0x53, 0x48, 0x00, 0x52, 0x06, 0x72, 0x6f, 0x6f, 0x74, 0x66, 0x73, 0x42, 0x06, 0x0a, 0x04,
+	0x64, 0x61, 0x74, 0x61, 0x22, 0x2f, 0x0a, 0x0a, 0x53, 0x61, 0x76, 0x65, 0x52, 0x6f, 0x6f, 0x74,
+	0x46, 0x53, 0x12, 0x21, 0x0a, 0x0c, 0x63, 0x6f, 0x6e, 0x74, 0x61, 0x69, 0x6e, 0x65, 0x72, 0x5f,
+	0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0b, 0x63, 0x6f, 0x6e, 0x74, 0x61, 0x69,
+	0x6e, 0x65, 0x72, 0x49, 0x64, 0x22, 0x57, 0x0a, 0x0b, 0x52, 0x65, 0x73, 0x74, 0x6f, 0x72, 0x65,
+	0x53, 0x70, 0x65, 0x63, 0x12, 0x48, 0x0a, 0x09, 0x72, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65,
+	0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x2a, 0x2e, 0x63, 0x6f, 0x6e, 0x74, 0x61, 0x69,
 	0x6e, 0x65, 0x72, 0x64, 0x2e, 0x72, 0x75, 0x6e, 0x68, 0x63, 0x73, 0x2e, 0x76, 0x31, 0x2e, 0x64,
-	0x69, 0x61, 0x67, 0x2e, 0x53, 0x74, 0x61, 0x72, 0x74, 0x53, 0x61, 0x76, 0x65, 0x52, 0x65, 0x71,
-	0x75, 0x65, 0x73, 0x74, 0x1a, 0x2c, 0x2e, 0x63, 0x6f, 0x6e, 0x74, 0x61, 0x69, 0x6e, 0x65, 0x72,
-	0x64, 0x2e, 0x72, 0x75, 0x6e, 0x68, 0x63, 0x73, 0x2e, 0x76, 0x31, 0x2e, 0x64, 0x69, 0x61, 0x67,
-	0x2e, 0x53, 0x74, 0x61, 0x72, 0x74, 0x53, 0x61, 0x76, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
-	0x73, 0x65, 0x12, 0x6f, 0x0a, 0x0c, 0x43, 0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x53, 0x61,
-	0x76, 0x65, 0x12, 0x2e, 0x2e, 0x63, 0x6f, 0x6e, 0x74, 0x61, 0x69, 0x6e, 0x65, 0x72, 0x64, 0x2e,
-	0x72, 0x75, 0x6e, 0x68, 0x63, 0x73, 0x2e, 0x76, 0x31, 0x2e, 0x64, 0x69, 0x61, 0x67, 0x2e, 0x43,
-	0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x53, 0x61, 0x76, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65,
-	0x73, 0x74, 0x1a, 0x2f, 0x2e, 0x63, 0x6f, 0x6e, 0x74, 0x61, 0x69, 0x6e, 0x65, 0x72, 0x64, 0x2e,
-	0x72, 0x75, 0x6e, 0x68, 0x63, 0x73, 0x2e, 0x76, 0x31, 0x2e, 0x64, 0x69, 0x61, 0x67, 0x2e, 0x43,
-	0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x53, 0x61, 0x76, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f,
-	0x6e, 0x73, 0x65, 0x42, 0x31, 0x5a, 0x2f, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f,
-	0x6d, 0x2f, 0x4d, 0x69, 0x63, 0x72, 0x6f, 0x73, 0x6f, 0x66, 0x74, 0x2f, 0x68, 0x63, 0x73, 0x73,
-	0x68, 0x69, 0x6d, 0x2f, 0x69, 0x6e, 0x74, 0x65, 0x72, 0x6e, 0x61, 0x6c, 0x2f, 0x73, 0x61, 0x76,
-	0x65, 0x3b, 0x73, 0x61, 0x76, 0x65, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x69, 0x61, 0x67, 0x2e, 0x52, 0x65, 0x73, 0x74, 0x6f, 0x72, 0x65, 0x52, 0x65, 0x73, 0x6f, 0x75,
+	0x72, 0x63, 0x65, 0x52, 0x09, 0x72, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x73, 0x22, 0x6d,
+	0x0a, 0x0f, 0x52, 0x65, 0x73, 0x74, 0x6f, 0x72, 0x65, 0x52, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63,
+	0x65, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69,
+	0x64, 0x12, 0x42, 0x0a, 0x06, 0x72, 0x6f, 0x6f, 0x74, 0x66, 0x73, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x0b, 0x32, 0x28, 0x2e, 0x63, 0x6f, 0x6e, 0x74, 0x61, 0x69, 0x6e, 0x65, 0x72, 0x64, 0x2e, 0x72,
+	0x75, 0x6e, 0x68, 0x63, 0x73, 0x2e, 0x76, 0x31, 0x2e, 0x64, 0x69, 0x61, 0x67, 0x2e, 0x52, 0x65,
+	0x73, 0x74, 0x6f, 0x72, 0x65, 0x52, 0x6f, 0x6f, 0x74, 0x46, 0x53, 0x48, 0x00, 0x52, 0x06, 0x72,
+	0x6f, 0x6f, 0x74, 0x66, 0x73, 0x42, 0x06, 0x0a, 0x04, 0x64, 0x61, 0x74, 0x61, 0x22, 0x3e, 0x0a,
+	0x0d, 0x52, 0x65, 0x73, 0x74, 0x6f, 0x72, 0x65, 0x52, 0x6f, 0x6f, 0x74, 0x46, 0x53, 0x12, 0x2d,
+	0x0a, 0x05, 0x6d, 0x6f, 0x75, 0x6e, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x17, 0x2e,
+	0x63, 0x6f, 0x6e, 0x74, 0x61, 0x69, 0x6e, 0x65, 0x72, 0x64, 0x2e, 0x74, 0x79, 0x70, 0x65, 0x73,
+	0x2e, 0x4d, 0x6f, 0x75, 0x6e, 0x74, 0x52, 0x05, 0x6d, 0x6f, 0x75, 0x6e, 0x74, 0x32, 0xdf, 0x01,
+	0x0a, 0x04, 0x53, 0x61, 0x76, 0x65, 0x12, 0x66, 0x0a, 0x09, 0x53, 0x74, 0x61, 0x72, 0x74, 0x53,
+	0x61, 0x76, 0x65, 0x12, 0x2b, 0x2e, 0x63, 0x6f, 0x6e, 0x74, 0x61, 0x69, 0x6e, 0x65, 0x72, 0x64,
+	0x2e, 0x72, 0x75, 0x6e, 0x68, 0x63, 0x73, 0x2e, 0x76, 0x31, 0x2e, 0x64, 0x69, 0x61, 0x67, 0x2e,
+	0x53, 0x74, 0x61, 0x72, 0x74, 0x53, 0x61, 0x76, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x1a, 0x2c, 0x2e, 0x63, 0x6f, 0x6e, 0x74, 0x61, 0x69, 0x6e, 0x65, 0x72, 0x64, 0x2e, 0x72, 0x75,
+	0x6e, 0x68, 0x63, 0x73, 0x2e, 0x76, 0x31, 0x2e, 0x64, 0x69, 0x61, 0x67, 0x2e, 0x53, 0x74, 0x61,
+	0x72, 0x74, 0x53, 0x61, 0x76, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x6f,
+	0x0a, 0x0c, 0x43, 0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x65, 0x53, 0x61, 0x76, 0x65, 0x12, 0x2e,
+	0x2e, 0x63, 0x6f, 0x6e, 0x74, 0x61, 0x69, 0x6e, 0x65, 0x72, 0x64, 0x2e, 0x72, 0x75, 0x6e, 0x68,
+	0x63, 0x73, 0x2e, 0x76, 0x31, 0x2e, 0x64, 0x69, 0x61, 0x67, 0x2e, 0x43, 0x6f, 0x6d, 0x70, 0x6c,
+	0x65, 0x74, 0x65, 0x53, 0x61, 0x76, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x2f,
+	0x2e, 0x63, 0x6f, 0x6e, 0x74, 0x61, 0x69, 0x6e, 0x65, 0x72, 0x64, 0x2e, 0x72, 0x75, 0x6e, 0x68,
+	0x63, 0x73, 0x2e, 0x76, 0x31, 0x2e, 0x64, 0x69, 0x61, 0x67, 0x2e, 0x43, 0x6f, 0x6d, 0x70, 0x6c,
+	0x65, 0x74, 0x65, 0x53, 0x61, 0x76, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x42,
+	0x31, 0x5a, 0x2f, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4d, 0x69,
+	0x63, 0x72, 0x6f, 0x73, 0x6f, 0x66, 0x74, 0x2f, 0x68, 0x63, 0x73, 0x73, 0x68, 0x69, 0x6d, 0x2f,
+	0x69, 0x6e, 0x74, 0x65, 0x72, 0x6e, 0x61, 0x6c, 0x2f, 0x73, 0x61, 0x76, 0x65, 0x3b, 0x73, 0x61,
+	0x76, 0x65, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
-	file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_rawDescOnce sync.Once
-	file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_rawDescData = file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_rawDesc
+	file_github_com_Microsoft_hcsshim_internal_save_save_proto_rawDescOnce sync.Once
+	file_github_com_Microsoft_hcsshim_internal_save_save_proto_rawDescData = file_github_com_Microsoft_hcsshim_internal_save_save_proto_rawDesc
 )
 
-func file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_rawDescGZIP() []byte {
-	file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_rawDescOnce.Do(func() {
-		file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_rawDescData = protoimpl.X.CompressGZIP(file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_rawDescData)
+func file_github_com_Microsoft_hcsshim_internal_save_save_proto_rawDescGZIP() []byte {
+	file_github_com_Microsoft_hcsshim_internal_save_save_proto_rawDescOnce.Do(func() {
+		file_github_com_Microsoft_hcsshim_internal_save_save_proto_rawDescData = protoimpl.X.CompressGZIP(file_github_com_Microsoft_hcsshim_internal_save_save_proto_rawDescData)
 	})
-	return file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_rawDescData
+	return file_github_com_Microsoft_hcsshim_internal_save_save_proto_rawDescData
 }
 
-var file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
-var file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_goTypes = []interface{}{
+var file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_github_com_Microsoft_hcsshim_internal_save_save_proto_goTypes = []interface{}{
 	(*StartSaveRequest)(nil),     // 0: containerd.runhcs.v1.diag.StartSaveRequest
 	(*StartSaveResponse)(nil),    // 1: containerd.runhcs.v1.diag.StartSaveResponse
 	(*CompleteSaveRequest)(nil),  // 2: containerd.runhcs.v1.diag.CompleteSaveRequest
 	(*CompleteSaveResponse)(nil), // 3: containerd.runhcs.v1.diag.CompleteSaveResponse
+	(*SaveResource)(nil),         // 4: containerd.runhcs.v1.diag.SaveResource
+	(*SaveRootFS)(nil),           // 5: containerd.runhcs.v1.diag.SaveRootFS
+	(*RestoreSpec)(nil),          // 6: containerd.runhcs.v1.diag.RestoreSpec
+	(*RestoreResource)(nil),      // 7: containerd.runhcs.v1.diag.RestoreResource
+	(*RestoreRootFS)(nil),        // 8: containerd.runhcs.v1.diag.RestoreRootFS
+	(*types.Mount)(nil),          // 9: containerd.types.Mount
 }
-var file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_depIdxs = []int32{
-	0, // 0: containerd.runhcs.v1.diag.Save.StartSave:input_type -> containerd.runhcs.v1.diag.StartSaveRequest
-	2, // 1: containerd.runhcs.v1.diag.Save.CompleteSave:input_type -> containerd.runhcs.v1.diag.CompleteSaveRequest
-	1, // 2: containerd.runhcs.v1.diag.Save.StartSave:output_type -> containerd.runhcs.v1.diag.StartSaveResponse
-	3, // 3: containerd.runhcs.v1.diag.Save.CompleteSave:output_type -> containerd.runhcs.v1.diag.CompleteSaveResponse
-	2, // [2:4] is the sub-list for method output_type
-	0, // [0:2] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+var file_github_com_Microsoft_hcsshim_internal_save_save_proto_depIdxs = []int32{
+	4, // 0: containerd.runhcs.v1.diag.StartSaveResponse.resources:type_name -> containerd.runhcs.v1.diag.SaveResource
+	5, // 1: containerd.runhcs.v1.diag.SaveResource.rootfs:type_name -> containerd.runhcs.v1.diag.SaveRootFS
+	7, // 2: containerd.runhcs.v1.diag.RestoreSpec.resources:type_name -> containerd.runhcs.v1.diag.RestoreResource
+	8, // 3: containerd.runhcs.v1.diag.RestoreResource.rootfs:type_name -> containerd.runhcs.v1.diag.RestoreRootFS
+	9, // 4: containerd.runhcs.v1.diag.RestoreRootFS.mount:type_name -> containerd.types.Mount
+	0, // 5: containerd.runhcs.v1.diag.Save.StartSave:input_type -> containerd.runhcs.v1.diag.StartSaveRequest
+	2, // 6: containerd.runhcs.v1.diag.Save.CompleteSave:input_type -> containerd.runhcs.v1.diag.CompleteSaveRequest
+	1, // 7: containerd.runhcs.v1.diag.Save.StartSave:output_type -> containerd.runhcs.v1.diag.StartSaveResponse
+	3, // 8: containerd.runhcs.v1.diag.Save.CompleteSave:output_type -> containerd.runhcs.v1.diag.CompleteSaveResponse
+	7, // [7:9] is the sub-list for method output_type
+	5, // [5:7] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
-func init() { file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_init() }
-func file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_init() {
-	if File_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto != nil {
+func init() { file_github_com_Microsoft_hcsshim_internal_save_save_proto_init() }
+func file_github_com_Microsoft_hcsshim_internal_save_save_proto_init() {
+	if File_github_com_Microsoft_hcsshim_internal_save_save_proto != nil {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*StartSaveRequest); i {
 			case 0:
 				return &v.state
@@ -286,7 +631,7 @@ func file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_p
 				return nil
 			}
 		}
-		file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+		file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*StartSaveResponse); i {
 			case 0:
 				return &v.state
@@ -298,7 +643,7 @@ func file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_p
 				return nil
 			}
 		}
-		file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+		file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*CompleteSaveRequest); i {
 			case 0:
 				return &v.state
@@ -310,7 +655,7 @@ func file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_p
 				return nil
 			}
 		}
-		file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+		file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*CompleteSaveResponse); i {
 			case 0:
 				return &v.state
@@ -322,23 +667,89 @@ func file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_p
 				return nil
 			}
 		}
+		file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SaveResource); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SaveRootFS); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RestoreSpec); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RestoreResource); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RestoreRootFS); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+	}
+	file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[4].OneofWrappers = []interface{}{
+		(*SaveResource_Rootfs)(nil),
+	}
+	file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes[7].OneofWrappers = []interface{}{
+		(*RestoreResource_Rootfs)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_rawDesc,
+			RawDescriptor: file_github_com_Microsoft_hcsshim_internal_save_save_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_goTypes,
-		DependencyIndexes: file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_depIdxs,
-		MessageInfos:      file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_msgTypes,
+		GoTypes:           file_github_com_Microsoft_hcsshim_internal_save_save_proto_goTypes,
+		DependencyIndexes: file_github_com_Microsoft_hcsshim_internal_save_save_proto_depIdxs,
+		MessageInfos:      file_github_com_Microsoft_hcsshim_internal_save_save_proto_msgTypes,
 	}.Build()
-	File_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto = out.File
-	file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_rawDesc = nil
-	file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_goTypes = nil
-	file_dev_azure_com_msazure_ContainerPlatform__git_azcri_git_api_save_save_proto_depIdxs = nil
+	File_github_com_Microsoft_hcsshim_internal_save_save_proto = out.File
+	file_github_com_Microsoft_hcsshim_internal_save_save_proto_rawDesc = nil
+	file_github_com_Microsoft_hcsshim_internal_save_save_proto_goTypes = nil
+	file_github_com_Microsoft_hcsshim_internal_save_save_proto_depIdxs = nil
 }

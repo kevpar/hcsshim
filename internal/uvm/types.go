@@ -147,6 +147,8 @@ type UtilityVM struct {
 
 	// confidentialUVMOptions hold confidential UVM specific options
 	confidentialUVMOptions *ConfidentialOptions
+
+	RootFSOrigins map[string]*OriginRootFS
 }
 
 func (uvm *UtilityVM) ScratchEncryptionEnabled() bool {
@@ -157,3 +159,13 @@ func (uvm *UtilityVM) ScratchEncryptionEnabled() bool {
 type OutputHandler func(io.Reader)
 
 type OutputHandlerCreator func(*Options) OutputHandler
+
+type OriginSCSIDisk struct {
+	Controller string
+	LUN        string
+}
+
+type OriginRootFS struct {
+	ScratchPath OriginSCSIDisk
+	ParentPaths []OriginSCSIDisk
+}

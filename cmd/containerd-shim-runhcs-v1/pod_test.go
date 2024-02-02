@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/Microsoft/hcsshim/internal/save"
 	task "github.com/containerd/containerd/api/runtime/task/v2"
 	"github.com/containerd/containerd/errdefs"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -90,8 +91,8 @@ func (tsp *testShimPod) StartSave(ctx context.Context, path string) error {
 	return fmt.Errorf("not implemented")
 }
 
-func (tsp *testShimPod) CompleteSave(ctx context.Context, path string) error {
-	return fmt.Errorf("not implemented")
+func (tsp *testShimPod) CompleteSave(ctx context.Context, path string) ([]*save.Resource, error) {
+	return nil, fmt.Errorf("not implemented")
 }
 
 // Pod tests

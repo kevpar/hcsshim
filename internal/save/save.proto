@@ -1,6 +1,9 @@
 syntax = "proto3";
 
 package containerd.runhcs.v1.diag;
+
+import "github.com/containerd/containerd/api/types/mount.proto";
+
 option go_package = "github.com/Microsoft/hcsshim/internal/save;save";
 
 service Save {
@@ -13,10 +16,38 @@ message StartSaveRequest {
     string path = 2;
 }
 
-message StartSaveResponse {}
+message StartSaveResponse {
+    repeated SaveResource resources = 1;
+}
 
 message CompleteSaveRequest {
     string pod_id = 1;
 }
 
 message CompleteSaveResponse {}
+
+message SaveResource {
+    string id = 1;
+    oneof data {
+        SaveRootFS rootfs = 2;
+    }  
+}
+
+message SaveRootFS {
+    string container_id = 1;
+}
+
+message RestoreSpec {
+    repeated RestoreResource resources = 1;
+}
+
+message RestoreResource {
+    string id = 1;
+    oneof data {
+        RestoreRootFS rootfs = 2;
+    }
+}
+
+message RestoreRootFS {
+    containerd.types.Mount mount = 1;
+}

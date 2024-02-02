@@ -10,14 +10,18 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Microsoft/go-winio/pkg/guid"
+	"github.com/Microsoft/hcsshim/internal/layers"
 	"github.com/Microsoft/hcsshim/internal/log"
 	"github.com/Microsoft/hcsshim/internal/oci"
+	"github.com/Microsoft/hcsshim/internal/save"
 	"github.com/Microsoft/hcsshim/internal/state"
 	"github.com/Microsoft/hcsshim/internal/uvm"
 	"github.com/Microsoft/hcsshim/osversion"
 	"github.com/Microsoft/hcsshim/pkg/annotations"
 	eventstypes "github.com/containerd/containerd/api/events"
 	task "github.com/containerd/containerd/api/runtime/task/v2"
+	"github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/runtime"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -68,7 +72,7 @@ type shimPod interface {
 	// is a no-op.
 	DeleteTask(ctx context.Context, tid string) error
 
-	StartSave(ctx context.Context, path string) error
+	StartSave(ctx context.Context, path string) ([]*save.SaveResource, error)
 	CompleteSave(ctx context.Context, path string) error
 
 	RestoreTask(ctx context.Context, oldID string, scratchPath string, events publisher, req *task.CreateTaskRequest) (shimTask, error)
@@ -303,6 +307,7 @@ type pod struct {
 	workloadTasks sync.Map
 
 	restorePath string
+	// rootFS      map[string]*savedRootFS
 }
 
 func (p *pod) ID() string {
@@ -463,18 +468,18 @@ type podState struct {
 	Spec *specs.Spec
 }
 
-func (p *pod) StartSave(ctx context.Context, path string) error {
+func (p *pod) StartSave(ctx context.Context, path string) ([]*save.SaveResource, error) {
 	if err := os.MkdirAll(path, 0755); err != nil {
-		return err
+		return nil, err
 	}
 	if p.host == nil {
-		return fmt.Errorf("can only save VM-isolated pods")
+		return nil, fmt.Errorf("can only save VM-isolated pods")
 	}
 	if err := p.host.StartSave(ctx, filepath.Join(path, "uvm")); err != nil {
-		return fmt.Errorf("save UVM: %w", err)
+		return nil, fmt.Errorf("save UVM: %w", err)
 	}
 	if err := p.sandboxTask.Save(ctx, filepath.Join(path, "sandboxTask")); err != nil {
-		return err
+		return nil, err
 	}
 	var rangeErr error
 	p.workloadTasks.Range(func(key, value any) bool {
@@ -487,16 +492,38 @@ func (p *pod) StartSave(ctx context.Context, path string) error {
 		return true
 	})
 	if rangeErr != nil {
-		return rangeErr
+		return nil, rangeErr
 	}
 	if err := state.Write(filepath.Join(path, "state.json"),
 		&podState{
 			ID:   p.id,
 			Spec: p.spec,
 		}); err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	o := p.host.RootFSOrigins
+	resources := make([]*save.SaveResource, 0, len(o))
+	outR := make(map[string]*uvm.OriginRootFS, len(o))
+	for cid, rootfs := range o {
+		g, err := guid.NewV4()
+		if err != nil {
+			return nil, err
+		}
+		id := g.String()
+		resources = append(resources, &save.SaveResource{
+			Id:   id,
+			Data: &save.SaveResource_Rootfs{Rootfs: &save.SaveRootFS{ContainerId: cid}},
+		})
+		outR[id] = &uvm.OriginRootFS{
+			ScratchPath: rootfs.ScratchPath,
+			ParentPaths: make([]uvm.OriginSCSIDisk, len(rootfs.ParentPaths)),
+		}
+		copy(outR[id].ParentPaths, rootfs.ParentPaths)
+	}
+	if err := state.Write[map[string]*uvm.OriginRootFS](filepath.Join(path, "resources.json"), &outR); err != nil {
+		return nil, err
+	}
+	return resources, nil
 }
 
 func (p *pod) CompleteSave(ctx context.Context, path string) error {
@@ -509,6 +536,9 @@ func (p *pod) CompleteSave(ctx context.Context, path string) error {
 	if err := p.host.CompleteSave(ctx, filepath.Join(path, "uvm")); err != nil {
 		return fmt.Errorf("save UVM: %w", err)
 	}
+	if err := p.host.Terminate(ctx); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -517,13 +547,58 @@ type standbyPod struct {
 	host  *uvm.UtilityVM
 }
 
-func restorePod(ctx context.Context, path string, netNS string, resources map[string]string, events publisher, req *task.CreateTaskRequest) (_ shimPod, err error) {
+func restorePod(ctx context.Context, path string, netNS string, resources *save.RestoreSpec, events publisher, req *task.CreateTaskRequest) (_ shimPod, err error) {
 	p := &pod{
 		events:      events,
 		id:          req.ID,
 		restorePath: path,
 	}
-	p.host, err = uvm.RestoreUVM(ctx, filepath.Join(path, "uvm"), netNS, resources, req.ID)
+	saved, err := state.Read[map[string]*uvm.OriginRootFS](filepath.Join(path, "resources.json"))
+	if err != nil {
+		return nil, err
+	}
+	var newResources []*uvm.Edit
+	for id, sr := range *saved {
+		var nr *save.RestoreResource
+		for _, r := range resources.Resources {
+			if id == r.Id {
+				nr = r
+				break
+			}
+		}
+		if nr == nil {
+			return nil, fmt.Errorf("resource not provided: %s", id)
+		}
+		m := nr.Data.(*save.RestoreResource_Rootfs).Rootfs.Mount
+		layers, err := layers.GetLCOWLayers([]*types.Mount{m}, nil)
+		if err != nil {
+			return nil, fmt.Errorf("get lcow layers: %w", err)
+		}
+		ctlr := func(s string) string {
+			switch s {
+			case "0":
+				return "df6d0690-79e5-55b6-a5ec-c1e2f77f580a"
+			default:
+				panic("bad controller")
+			}
+		}
+		newResources = append(newResources, &uvm.Edit{
+			Controller: ctlr(sr.ScratchPath.Controller),
+			LUN:        sr.ScratchPath.LUN,
+			Path:       layers.ScratchVHDPath,
+		})
+		if len(layers.Layers) != len(sr.ParentPaths) {
+			return nil, fmt.Errorf("expected %d parent paths but got %d", len(sr.ParentPaths), len(layers.Layers))
+		}
+		for i := range layers.Layers {
+			newResources = append(newResources, &uvm.Edit{
+				Controller: ctlr(sr.ParentPaths[i].Controller),
+				LUN:        sr.ParentPaths[i].LUN,
+				Path:       layers.Layers[i].VHDPath,
+			})
+		}
+	}
+	p.host, err = uvm.RestoreUVM(ctx, filepath.Join(path, "uvm"), netNS, req.ID, newResources)
 	if err != nil {
 		return nil, err
 	}

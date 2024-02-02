@@ -35,6 +35,7 @@ import (
 	hcsschema "github.com/Microsoft/hcsshim/internal/hcs/schema2"
 	"github.com/Microsoft/hcsshim/internal/hcsoci"
 	"github.com/Microsoft/hcsshim/internal/jobcontainers"
+	"github.com/Microsoft/hcsshim/internal/layers"
 	"github.com/Microsoft/hcsshim/internal/log"
 	"github.com/Microsoft/hcsshim/internal/memory"
 	"github.com/Microsoft/hcsshim/internal/oc"
@@ -159,7 +160,7 @@ func createContainer(
 			if s.Windows != nil {
 				layerFolders = s.Windows.LayerFolders
 			}
-			lcowLayers, err := getLCOWLayers(rootfs, layerFolders)
+			lcowLayers, err := layers.GetLCOWLayers(rootfs, layerFolders)
 			if err != nil {
 				return nil, nil, err
 			}
