@@ -304,49 +304,6 @@ func RestoreUVM(ctx context.Context, path string, netNS string, id string, edits
 			return nil, err
 		}
 	}
-	// oldResources, err := statepkg.Read[map[string]Resource](filepath.Join(path, "resources.json"))
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// finalResources := *oldResources
-	// for id, p := range resources {
-	// 	r := finalResources[id]
-	// 	r.SCSIDisk.Path = p
-	// 	finalResources[id] = r
-	// }
-	// for _, r := range finalResources {
-	// 	if scsi := r.SCSIDisk; scsi != nil {
-	// 		att := config.VirtualMachine.Devices.Scsi[scsi.Controller].Attachments[scsi.LUN]
-	// 		att.Path = scsi.Path
-	// 		config.VirtualMachine.Devices.Scsi[scsi.Controller].Attachments[scsi.LUN] = att
-	// 		if err := wclayer.GrantVmAccess(ctx, fmt.Sprintf("%s@vm", id), scsi.Path); err != nil {
-	// 			return nil, err
-	// 		}
-	// 	}
-	// }
-	// // Scratch disk
-	// type disk struct {
-	// 	controller string
-	// 	lun        string
-	// }
-	// var writableDisks []disk
-	// for i := range config.VirtualMachine.Devices.Scsi {
-	// 	for j := range config.VirtualMachine.Devices.Scsi[i].Attachments {
-	// 		if !config.VirtualMachine.Devices.Scsi[i].Attachments[j].ReadOnly {
-	// 			writableDisks = append(writableDisks, disk{i, j})
-	// 		}
-	// 	}
-	// }
-	// if len(writableDisks) != 1 {
-	// 	return nil, fmt.Errorf("expected 1 writable disk but got %d", len(writableDisks))
-	// }
-	// d := writableDisks[0]
-	// scratch := config.VirtualMachine.Devices.Scsi[d.controller].Attachments[d.lun]
-	// scratch.Path = scratchPath
-	// config.VirtualMachine.Devices.Scsi[d.controller].Attachments[d.lun] = scratch
-	// if err := wclayer.GrantVmAccess(ctx, fmt.Sprintf("%s@vm", id), scratchPath); err != nil {
-	// 	return nil, err
-	// }
 
 	config.VirtualMachine.RestoreState = &hcsschema.RestoreState{SaveStateFilePath: filepath.Join(path, "vm.state")}
 
