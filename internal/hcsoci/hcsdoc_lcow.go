@@ -11,6 +11,7 @@ import (
 	"github.com/Microsoft/hcsshim/internal/log"
 	"github.com/Microsoft/hcsshim/internal/oci"
 	"github.com/Microsoft/hcsshim/internal/schemaversion"
+	"github.com/Microsoft/hcsshim/internal/uvm"
 	"github.com/Microsoft/hcsshim/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
@@ -62,7 +63,7 @@ func setWindowsNetworkNamespace(coi *createOptionsInternal, spec *specs.Spec) {
 			spec.Windows = &specs.Windows{}
 		}
 		spec.Windows.Network = &specs.WindowsNetwork{
-			NetworkNamespace: coi.Spec.Windows.Network.NetworkNamespace,
+			NetworkNamespace: uvm.GuestNamespaceID.String(),
 		}
 	}
 }

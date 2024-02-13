@@ -1166,7 +1166,7 @@ func modifyNetwork(ctx context.Context, rt guestrequest.RequestType, na *guestre
 		// container or not so it must always call `Sync`.
 		return ns.Sync(ctx)
 	case guestrequest.RequestTypeRemove:
-		ns := GetOrAddNetworkNamespace(na.ID)
+		ns := GetOrAddNetworkNamespace(na.NamespaceID)
 		if err := ns.RemoveAdapter(ctx, na.ID); err != nil {
 			return err
 		}

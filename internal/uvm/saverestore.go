@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
-	"github.com/Microsoft/hcsshim/hcn"
 	"github.com/Microsoft/hcsshim/internal/cow"
 	"github.com/Microsoft/hcsshim/internal/gcs"
 	"github.com/Microsoft/hcsshim/internal/hcs"
@@ -124,6 +124,9 @@ func updateConfig(config *hcsschema.ComputeSystem, changeAny any) error {
 			"change": string(j2),
 		}).Info("UPDATED CONFIG")
 	case guestrequest.RequestTypeRemove:
+		if strings.HasPrefix(change.ResourcePath, "VirtualMachine/Devices/NetworkAdapters/") {
+			return nil
+		}
 		return fmt.Errorf("unrecognized update path: %s with payload type %T", change.ResourcePath, change.Settings)
 	default:
 		return fmt.Errorf("unrecognized request type: %s", change.RequestType)
@@ -147,6 +150,11 @@ type uvmState struct {
 func (uvm *UtilityVM) StartSave(ctx context.Context, path string) error {
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return err
+	}
+	for ns := range uvm.namespaces {
+		if err := uvm.RemoveNetNS(ctx, ns); err != nil {
+			return fmt.Errorf("remove netns %s: %w", ns, err)
+		}
 	}
 	if err := uvm.hcsSystem.Pause(ctx); err != nil {
 		return err
@@ -175,30 +183,6 @@ func (uvm *UtilityVM) StartSave(ctx context.Context, path string) error {
 	if err := uvm.hcsSystem.Save(ctx, &hcsschema.SaveOptions{SaveStateFilePath: filepath.Join(path, "vm.state")}); err != nil {
 		return err
 	}
-
-	// resources := make(map[string]Resource)
-	// for controllerID, attachments := range uvm.config.VirtualMachine.Devices.Scsi {
-	// 	for lun, att := range attachments.Attachments {
-	// 		if att.ReadOnly {
-	// 			continue
-	// 		}
-	// 		r := Resource{
-	// 			SCSIDisk: &SCSIDisk{
-	// 				Controller: controllerID,
-	// 				LUN:        lun,
-	// 				Path:       att.Path,
-	// 			},
-	// 		}
-	// 		g, err := guid.NewV4()
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	// 		resources[g.String()] = r
-	// 	}
-	// }
-	// if err := statepkg.Write(filepath.Join(path, "resources.json"), &resources); err != nil {
-	// 	return err
-	// }
 
 	return nil
 }
@@ -267,13 +251,6 @@ func RestoreUVM(ctx context.Context, path string, netNS string, id string, edits
 	}
 
 	// NICs
-	hcnNamespace, err := hcn.GetNamespaceByID(netNS)
-	if err != nil {
-		return nil, err
-	}
-	uvm.namespaces = map[string]*namespaceInfo{
-		hcnNamespace.Id: {make(map[string]*nicInfo)},
-	}
 	endpoints, err := GetNamespaceEndpoints(ctx, netNS)
 	if err != nil {
 		return nil, err
@@ -284,17 +261,8 @@ func RestoreUVM(ctx context.Context, path string, netNS string, id string, edits
 	if len(endpoints) != 1 {
 		return nil, fmt.Errorf("can only support one endpoint right now")
 	}
-	e := endpoints[0]
-	for k := range config.VirtualMachine.Devices.NetworkAdapters {
-		config.VirtualMachine.Devices.NetworkAdapters[k] = hcsschema.NetworkAdapter{
-			EndpointId: e.Id,
-			MacAddress: e.MacAddress,
-		}
-		uvm.namespaces[hcnNamespace.Id].nics[k] = &nicInfo{
-			ID:       k,
-			Endpoint: e,
-		}
-	}
+	// e := endpoints[0]
+	config.VirtualMachine.Devices.NetworkAdapters = nil
 
 	for _, e := range edits {
 		att := config.VirtualMachine.Devices.Scsi[e.Controller].Attachments[e.LUN]
@@ -335,6 +303,10 @@ func RestoreUVM(ctx context.Context, path string, netNS string, id string, edits
 
 	if err := uvm.Start(ctx); err != nil {
 		return nil, err
+	}
+
+	if err := uvm.SetupNetworkNamespace(ctx, netNS); err != nil {
+		return nil, fmt.Errorf("add netns %s as %s: %w", netNS, GuestNamespaceID, err)
 	}
 
 	return uvm, nil

@@ -36,11 +36,17 @@ var (
 	ErrNICNotFound = errors.New("NIC not found in network namespace")
 )
 
+var (
+	// baaa389b-bfd2-4500-b972-000000000000
+	// base guid, chosen arbitrarily
+	GuestNamespaceID = guid.GUID{Data1: 0xbaaa389b, Data2: 0xbfd2, Data3: 0x4500, Data4: [8]byte{0xb9, 0x72, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}
+)
+
 // In this function we take the namespace ID of the namespace that was created for this
 // UVM. We hot add the namespace. We get the endpoints associated with this namespace
 // and then hot add those endpoints.
 func (uvm *UtilityVM) SetupNetworkNamespace(ctx context.Context, nsid string) error {
-	nsidInsideUVM := nsid
+	nsidInsideUVM := GuestNamespaceID.String()
 
 	// Query endpoints with actual nsid
 	endpoints, err := GetNamespaceEndpoints(ctx, nsid)
@@ -55,7 +61,7 @@ func (uvm *UtilityVM) SetupNetworkNamespace(ctx context.Context, nsid string) er
 		return err
 	}
 
-	if err = uvm.AddNetNS(ctx, hcnNamespace); err != nil {
+	if err = uvm.AddNetNS(ctx, hcnNamespace, nsidInsideUVM); err != nil {
 		return err
 	}
 
@@ -305,10 +311,10 @@ func (endpoints *NetworkEndpoints) Release(ctx context.Context) error {
 // struct returned by the GetNamespaceByID. For most uses cases AddNetNSByID is more appropriate.
 //
 // If a namespace with the same id already exists this returns `ErrNetNSAlreadyAttached`.
-func (uvm *UtilityVM) AddNetNS(ctx context.Context, hcnNamespace *hcn.HostComputeNamespace) error {
+func (uvm *UtilityVM) AddNetNS(ctx context.Context, hcnNamespace *hcn.HostComputeNamespace, guestNSID string) error {
 	uvm.m.Lock()
 	defer uvm.m.Unlock()
-	if _, ok := uvm.namespaces[hcnNamespace.Id]; ok {
+	if _, ok := uvm.namespaces[guestNSID]; ok {
 		return ErrNetNSAlreadyAttached
 	}
 
@@ -332,7 +338,7 @@ func (uvm *UtilityVM) AddNetNS(ctx context.Context, hcnNamespace *hcn.HostComput
 	if uvm.namespaces == nil {
 		uvm.namespaces = make(map[string]*namespaceInfo)
 	}
-	uvm.namespaces[hcnNamespace.Id] = &namespaceInfo{
+	uvm.namespaces[guestNSID] = &namespaceInfo{
 		nics: make(map[string]*nicInfo),
 	}
 	return nil
@@ -348,7 +354,7 @@ func (uvm *UtilityVM) AddNetNSByID(ctx context.Context, id string) error {
 		return err
 	}
 
-	if err = uvm.AddNetNS(ctx, hcnNamespace); err != nil {
+	if err = uvm.AddNetNS(ctx, hcnNamespace, GuestNamespaceID.String()); err != nil {
 		return err
 	}
 	return nil
@@ -373,7 +379,7 @@ func (uvm *UtilityVM) AddEndpointToNSWithID(ctx context.Context, nsID, nicID str
 			}
 			nicID = id.String()
 		}
-		if err := uvm.addNIC(ctx, nicID, endpoint); err != nil {
+		if err := uvm.addNIC(ctx, nicID, endpoint, nsID); err != nil {
 			return err
 		}
 		ns.nics[endpoint.Id] = &nicInfo{
@@ -404,7 +410,7 @@ func (uvm *UtilityVM) AddEndpointsToNS(ctx context.Context, id string, endpoints
 			if err != nil {
 				return err
 			}
-			if err := uvm.addNIC(ctx, nicID.String(), endpoint); err != nil {
+			if err := uvm.addNIC(ctx, nicID.String(), endpoint, id); err != nil {
 				return err
 			}
 			ns.nics[endpoint.Id] = &nicInfo{
@@ -421,11 +427,12 @@ func (uvm *UtilityVM) AddEndpointsToNS(ctx context.Context, id string, endpoints
 //
 // If a namespace matching `id` is not found this command silently succeeds.
 func (uvm *UtilityVM) RemoveNetNS(ctx context.Context, id string) error {
+	id = GuestNamespaceID.String()
 	uvm.m.Lock()
 	defer uvm.m.Unlock()
 	if ns, ok := uvm.namespaces[id]; ok {
 		for _, ninfo := range ns.nics {
-			if err := uvm.removeNIC(ctx, ninfo.ID, ninfo.Endpoint); err != nil {
+			if err := uvm.removeNIC(ctx, ninfo.ID, ninfo.Endpoint, id); err != nil {
 				return err
 			}
 			ns.nics[ninfo.Endpoint.Id] = nil
@@ -470,7 +477,7 @@ func (uvm *UtilityVM) RemoveEndpointsFromNS(ctx context.Context, id string, endp
 
 	for _, endpoint := range endpoints {
 		if ninfo, ok := ns.nics[endpoint.Id]; ok && ninfo != nil {
-			if err := uvm.removeNIC(ctx, ninfo.ID, ninfo.Endpoint); err != nil {
+			if err := uvm.removeNIC(ctx, ninfo.ID, ninfo.Endpoint, id); err != nil {
 				return err
 			}
 			delete(ns.nics, endpoint.Id)
@@ -494,7 +501,7 @@ func (uvm *UtilityVM) RemoveEndpointFromNS(ctx context.Context, id string, endpo
 	}
 
 	if ninfo, ok := ns.nics[endpoint.Id]; ok && ninfo != nil {
-		if err := uvm.removeNIC(ctx, ninfo.ID, ninfo.Endpoint); err != nil {
+		if err := uvm.removeNIC(ctx, ninfo.ID, ninfo.Endpoint, id); err != nil {
 			return err
 		}
 		delete(ns.nics, endpoint.Id)
@@ -525,7 +532,7 @@ func getNetworkModifyRequest(adapterID string, requestType guestrequest.RequestT
 }
 
 // addNIC adds a nic to the Utility VM.
-func (uvm *UtilityVM) addNIC(ctx context.Context, id string, endpoint *hns.HNSEndpoint) error {
+func (uvm *UtilityVM) addNIC(ctx context.Context, id string, endpoint *hns.HNSEndpoint, guestNSID string) error {
 	// First a pre-add. This is a guest-only request and is only done on Windows.
 	if uvm.operatingSystem == "windows" {
 		preAddRequest := hcsschema.ModifySettingRequest{
@@ -565,7 +572,7 @@ func (uvm *UtilityVM) addNIC(ctx context.Context, id string, endpoint *hns.HNSEn
 	} else {
 		// Verify this version of LCOW supports Network HotAdd
 		s := &guestresource.LCOWNetworkAdapter{
-			NamespaceID:     endpoint.Namespace.ID,
+			NamespaceID:     guestNSID,
 			ID:              id,
 			MacAddress:      endpoint.MacAddress,
 			IPAddress:       endpoint.IPAddress.String(),
@@ -604,7 +611,7 @@ func (uvm *UtilityVM) addNIC(ctx context.Context, id string, endpoint *hns.HNSEn
 	return nil
 }
 
-func (uvm *UtilityVM) removeNIC(ctx context.Context, id string, endpoint *hns.HNSEndpoint) error {
+func (uvm *UtilityVM) removeNIC(ctx context.Context, id string, endpoint *hns.HNSEndpoint, guestNSID string) error {
 	request := hcsschema.ModifySettingRequest{
 		RequestType:  guestrequest.RequestTypeRemove,
 		ResourcePath: fmt.Sprintf(resourcepaths.NetworkResourceFormat, id),
@@ -629,8 +636,8 @@ func (uvm *UtilityVM) removeNIC(ctx context.Context, id string, endpoint *hns.HN
 				ResourceType: guestresource.ResourceTypeNetwork,
 				RequestType:  guestrequest.RequestTypeRemove,
 				Settings: &guestresource.LCOWNetworkAdapter{
-					NamespaceID: endpoint.Namespace.ID,
-					ID:          endpoint.Id,
+					NamespaceID: guestNSID,
+					ID:          id,
 				},
 			}
 		}
@@ -644,9 +651,9 @@ func (uvm *UtilityVM) removeNIC(ctx context.Context, id string, endpoint *hns.HN
 
 // Removes all NICs added to this uvm.
 func (uvm *UtilityVM) RemoveAllNICs(ctx context.Context) error {
-	for _, ns := range uvm.namespaces {
+	for nsid, ns := range uvm.namespaces {
 		for _, ninfo := range ns.nics {
-			if err := uvm.removeNIC(ctx, ninfo.ID, ninfo.Endpoint); err != nil {
+			if err := uvm.removeNIC(ctx, ninfo.ID, ninfo.Endpoint, nsid); err != nil {
 				return err
 			}
 		}
