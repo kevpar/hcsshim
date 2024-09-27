@@ -14,7 +14,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
-	"github.com/Microsoft/hcsshim/internal/guestpath"
 	"github.com/Microsoft/hcsshim/internal/log"
 	"github.com/Microsoft/hcsshim/internal/ospath"
 	"github.com/Microsoft/hcsshim/internal/resources"
@@ -136,6 +135,7 @@ func MountLCOWLayers(ctx context.Context, containerID string, layers *LCOWLayers
 		hostPath,
 		false,
 		vm.ID(),
+		guestRoot,
 		mConfig,
 	)
 	if err != nil {
@@ -155,7 +155,7 @@ func MountLCOWLayers(ctx context.Context, containerID string, layers *LCOWLayers
 		}
 	}()
 
-	rootfs := ospath.Join(vm.OS(), guestRoot, guestpath.RootfsPath)
+	rootfs := ospath.Join(vm.OS(), guestRoot, "rootfs")
 	err = vm.CombineLayersLCOW(ctx, containerID, lcowUvmLayerPaths, containerScratchPathInUVM, rootfs)
 	if err != nil {
 		return "", "", nil, err
@@ -193,6 +193,7 @@ func addLCOWLayer(ctx context.Context, vm *uvm.UtilityVM, layer *LCOWLayer) (uvm
 		ctx,
 		layer.VHDPath,
 		true,
+		"",
 		"",
 		&scsi.MountConfig{
 			Partition: layer.Partition,
