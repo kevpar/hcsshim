@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"github.com/Microsoft/go-winio/pkg/guid"
 	"github.com/Microsoft/hcsshim/internal/cow"
@@ -192,9 +191,6 @@ func CreateContainer(ctx context.Context, createOptions *CreateOptions) (_ cow.C
 	if coi.HostingSystem != nil {
 		if coi.Spec.Linux != nil {
 			r.SetContainerRootInUVM(fmt.Sprintf(lcowRootInUVM, coi.ID))
-		} else {
-			n := coi.HostingSystem.ContainerCounter()
-			r.SetContainerRootInUVM(fmt.Sprintf(wcowRootInUVM, strconv.FormatUint(n, 16)))
 		}
 		// install kernel drivers if necessary.
 		// do this before network setup in case any of the drivers requested are
