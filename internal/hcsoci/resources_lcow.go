@@ -41,17 +41,6 @@ func allocateLinuxResources(ctx context.Context, coi *createOptionsInternal, r *
 			r.SetLayers(closer)
 		}
 		r.SetLcowScratchPath(scratchPath)
-	} else if coi.Spec.Root.Path != "" {
-		// This is the "Plan 9" root filesystem.
-		// TODO: We need a test for this. Ask @jstarks how you can even lay this out on Windows.
-		hostPath := coi.Spec.Root.Path
-		uvmPathForContainersFileSystem := path.Join(r.ContainerRootInUVM(), guestpath.RootfsPath)
-		share, err := coi.HostingSystem.AddPlan9(ctx, hostPath, uvmPathForContainersFileSystem, coi.Spec.Root.Readonly, false, nil)
-		if err != nil {
-			return errors.Wrap(err, "adding plan9 root")
-		}
-		coi.Spec.Root.Path = uvmPathForContainersFileSystem
-		r.Add(share)
 	} else {
 		return errors.New("must provide either Windows.LayerFolders or Root.Path")
 	}
