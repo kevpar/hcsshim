@@ -26,16 +26,6 @@ func (r *Resources) SetCreatedNetNS(created bool) {
 	r.createdNetNS = true
 }
 
-// ContainerRootInUVM returns the containerRootInUVM for the container
-func (r *Resources) ContainerRootInUVM() string {
-	return r.containerRootInUVM
-}
-
-// SetContainerRootInUVM updates the container resource's containerRootInUVM value
-func (r *Resources) SetContainerRootInUVM(containerRootInUVM string) {
-	r.containerRootInUVM = containerRootInUVM
-}
-
 // SetAddedNetNSToVM updates the container resource's AddedNetNSToVM value
 func (r *Resources) SetAddedNetNSToVM(addedNetNSToVM bool) {
 	r.addedNetNSToVM = addedNetNSToVM
@@ -66,13 +56,7 @@ func (r *Resources) Add(newResources ...ResourceCloser) {
 // container exits.
 type Resources struct {
 	id string
-	// containerRootInUVM is the base path in a utility VM where elements relating
-	// to a container are exposed. For example, the mounted filesystem; the runtime
-	// spec (in the case of LCOW); overlay and scratch (in the case of LCOW).
-	//
-	// For WCOW, this will be under wcowRootInUVM. For LCOW, this will be under
-	// lcowRootInUVM, this will also be the "OCI Bundle Path".
-	containerRootInUVM string
+
 	// lcowScratchPath represents the path inside the UVM at which the LCOW scratch
 	// directory is present.  Usually, this is the path at which the container scratch
 	// VHD is mounted inside the UVM (`containerRootInUVM`). But in case of scratch

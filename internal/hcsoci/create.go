@@ -12,7 +12,6 @@ import (
 
 	"github.com/Microsoft/go-winio/pkg/guid"
 	"github.com/Microsoft/hcsshim/internal/cow"
-	"github.com/Microsoft/hcsshim/internal/guestpath"
 	"github.com/Microsoft/hcsshim/internal/hcs"
 	hcsschema "github.com/Microsoft/hcsshim/internal/hcs/schema2"
 	"github.com/Microsoft/hcsshim/internal/layers"
@@ -23,11 +22,6 @@ import (
 	"github.com/Microsoft/hcsshim/internal/uvm"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
-)
-
-var (
-	lcowRootInUVM = guestpath.LCOWRootPrefixInUVM + "/%s"
-	wcowRootInUVM = guestpath.WCOWRootPrefixInUVM + "/%s"
 )
 
 // CreateOptions are the set of fields used to call CreateContainer().
@@ -189,9 +183,6 @@ func CreateContainer(ctx context.Context, createOptions *CreateOptions) (_ cow.C
 	}()
 
 	if coi.HostingSystem != nil {
-		if coi.Spec.Linux != nil {
-			r.SetContainerRootInUVM(fmt.Sprintf(lcowRootInUVM, coi.ID))
-		}
 		// install kernel drivers if necessary.
 		// do this before network setup in case any of the drivers requested are
 		// network drivers
@@ -225,12 +216,12 @@ func CreateContainer(ctx context.Context, createOptions *CreateOptions) (_ cow.C
 			return nil, r, errors.New("LCOW v1 not supported")
 		}
 		log.G(ctx).Debug("hcsshim::CreateContainer allocateLinuxResources")
-		err = allocateLinuxResources(ctx, coi, r, isSandbox)
+		guestRoot, err := allocateLinuxResources(ctx, coi, r, isSandbox)
 		if err != nil {
 			log.G(ctx).WithError(err).Debug("failed to allocateLinuxResources")
 			return nil, r, err
 		}
-		gcsDocument, err = createLinuxContainerDocument(ctx, coi, r.ContainerRootInUVM(), r.LcowScratchPath())
+		gcsDocument, err = createLinuxContainerDocument(ctx, coi, guestRoot, r.LcowScratchPath())
 		if err != nil {
 			log.G(ctx).WithError(err).Debug("failed createHCSContainerDocument")
 			return nil, r, err

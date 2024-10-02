@@ -14,7 +14,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
-	"github.com/Microsoft/hcsshim/internal/guestpath"
 	"github.com/Microsoft/hcsshim/internal/log"
 	"github.com/Microsoft/hcsshim/internal/ospath"
 	"github.com/Microsoft/hcsshim/internal/resources"
@@ -77,13 +76,13 @@ func (lc *lcowLayersCloser) Release(ctx context.Context) (retErr error) {
 // Returns the path at which the `rootfs` of the container can be accessed. Also, returns the path inside the
 // UVM at which container scratch directory is located. Usually, this path is the path at which the container
 // scratch VHD is mounted. However, in case of scratch sharing this is a directory under the UVM scratch.
-func MountLCOWLayers(ctx context.Context, containerID string, layers *LCOWLayers, guestRoot string, vm *uvm.UtilityVM) (_, _ string, _ resources.ResourceCloser, err error) {
+func MountLCOWLayers(ctx context.Context, containerID string, layers *LCOWLayers, vm *uvm.UtilityVM) (_, _, _ string, _ resources.ResourceCloser, err error) {
 	if vm == nil {
-		return "", "", nil, errors.New("MountLCOWLayers cannot be called for process-isolated containers")
+		return "", "", "", nil, errors.New("MountLCOWLayers cannot be called for process-isolated containers")
 	}
 
 	if vm.OS() != "linux" {
-		return "", "", nil, errors.New("MountLCOWLayers should only be called for LCOW")
+		return "", "", "", nil, errors.New("MountLCOWLayers should only be called for LCOW")
 	}
 
 	// V2 UVM
@@ -107,7 +106,7 @@ func MountLCOWLayers(ctx context.Context, containerID string, layers *LCOWLayers
 		log.G(ctx).WithField("layerPath", layer.VHDPath).Debug("mounting layer")
 		uvmPath, closer, err := addLCOWLayer(ctx, vm, layer)
 		if err != nil {
-			return "", "", nil, fmt.Errorf("failed to add LCOW layer: %w", err)
+			return "", "", "", nil, fmt.Errorf("failed to add LCOW layer: %w", err)
 		}
 		layerClosers = append(layerClosers, closer)
 		lcowUvmLayerPaths = append(lcowUvmLayerPaths, uvmPath)
@@ -116,7 +115,7 @@ func MountLCOWLayers(ctx context.Context, containerID string, layers *LCOWLayers
 	hostPath := layers.ScratchVHDPath
 	hostPath, err = filepath.EvalSymlinks(hostPath)
 	if err != nil {
-		return "", "", nil, fmt.Errorf("failed to eval symlinks on scratch path: %w", err)
+		return "", "", "", nil, fmt.Errorf("failed to eval symlinks on scratch path: %w", err)
 	}
 	log.G(ctx).WithField("hostPath", hostPath).Debug("mounting scratch VHD")
 
@@ -136,17 +135,19 @@ func MountLCOWLayers(ctx context.Context, containerID string, layers *LCOWLayers
 		hostPath,
 		false,
 		vm.ID(),
-		guestRoot,
+		"",
 		mConfig,
 	)
 	if err != nil {
-		return "", "", nil, fmt.Errorf("failed to add SCSI scratch VHD: %w", err)
+		return "", "", "", nil, fmt.Errorf("failed to add SCSI scratch VHD: %w", err)
 	}
 
 	// handles the case where we want to share a scratch disk for multiple containers instead
 	// of mounting a new one. Pass a unique value for `ScratchPath` to avoid container upper and
 	// work directories colliding in the UVM.
-	containerScratchPathInUVM := ospath.Join("linux", scsiMount.GuestPath(), "scratch", containerID)
+	guestRoot := ospath.Join(vm.OS(), scsiMount.GuestPath(), "bundles", containerID)
+	rootfs := ospath.Join(vm.OS(), guestRoot, "rootfs")
+	containerScratchPathInUVM := ospath.Join(vm.OS(), guestRoot, "scratch")
 
 	defer func() {
 		if err != nil {
@@ -156,10 +157,9 @@ func MountLCOWLayers(ctx context.Context, containerID string, layers *LCOWLayers
 		}
 	}()
 
-	rootfs := ospath.Join(vm.OS(), guestRoot, guestpath.RootfsPath)
 	err = vm.CombineLayersLCOW(ctx, containerID, lcowUvmLayerPaths, containerScratchPathInUVM, rootfs)
 	if err != nil {
-		return "", "", nil, err
+		return "", "", "", nil, err
 	}
 	log.G(ctx).Debug("hcsshim::MountLCOWLayers Succeeded")
 	closer := &lcowLayersCloser{
@@ -168,7 +168,7 @@ func MountLCOWLayers(ctx context.Context, containerID string, layers *LCOWLayers
 		scratchMount:            scsiMount,
 		layerClosers:            layerClosers,
 	}
-	return rootfs, containerScratchPathInUVM, closer, nil
+	return rootfs, containerScratchPathInUVM, guestRoot, closer, nil
 }
 
 func addLCOWLayer(ctx context.Context, vm *uvm.UtilityVM, layer *LCOWLayer) (uvmPath string, _ resources.ResourceCloser, err error) {

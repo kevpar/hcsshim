@@ -23,16 +23,21 @@ import (
 	"github.com/Microsoft/hcsshim/internal/uvm/scsi"
 )
 
-func allocateLinuxResources(ctx context.Context, coi *createOptionsInternal, r *resources.Resources, isSandbox bool) error {
+func allocateLinuxResources(ctx context.Context, coi *createOptionsInternal, r *resources.Resources, isSandbox bool) (string, error) {
 	if coi.Spec.Root == nil {
 		coi.Spec.Root = &specs.Root{}
 	}
-	containerRootInUVM := r.ContainerRootInUVM()
+	var guestRoot string
 	if coi.LCOWLayers != nil {
 		log.G(ctx).Debug("hcsshim::allocateLinuxResources mounting storage")
-		rootPath, scratchPath, closer, err := layers.MountLCOWLayers(ctx, coi.actualID, coi.LCOWLayers, containerRootInUVM, coi.HostingSystem)
+		var (
+			rootPath, scratchPath string
+			closer                resources.ResourceCloser
+			err                   error
+		)
+		rootPath, scratchPath, guestRoot, closer, err = layers.MountLCOWLayers(ctx, coi.actualID, coi.LCOWLayers, coi.HostingSystem)
 		if err != nil {
-			return errors.Wrap(err, "failed to mount container storage")
+			return "", errors.Wrap(err, "failed to mount container storage")
 		}
 		coi.Spec.Root.Path = rootPath
 		// If this is the pause container in a hypervisor-isolated pod, we can skip cleanup of
@@ -42,7 +47,7 @@ func allocateLinuxResources(ctx context.Context, coi *createOptionsInternal, r *
 		}
 		r.SetLcowScratchPath(scratchPath)
 	} else {
-		return errors.New("must provide either Windows.LayerFolders or Root.Path")
+		return "", errors.New("must provide either Windows.LayerFolders or Root.Path")
 	}
 
 	for i, mount := range coi.Spec.Mounts {
@@ -55,12 +60,12 @@ func allocateLinuxResources(ctx context.Context, coi *createOptionsInternal, r *
 			continue
 		}
 		if mount.Destination == "" || mount.Source == "" {
-			return fmt.Errorf("invalid OCI spec - a mount must have both source and a destination: %+v", mount)
+			return "", fmt.Errorf("invalid OCI spec - a mount must have both source and a destination: %+v", mount)
 		}
 
 		if coi.HostingSystem != nil {
 			hostPath := mount.Source
-			uvmPathForShare := path.Join(containerRootInUVM, fmt.Sprintf(guestpath.LCOWMountPathPrefixFmt, i))
+			uvmPathForShare := path.Join(guestRoot, fmt.Sprintf("/mounts/m%d", i))
 			uvmPathForFile := uvmPathForShare
 
 			readOnly := false
@@ -85,7 +90,7 @@ func allocateLinuxResources(ctx context.Context, coi *createOptionsInternal, r *
 					&scsi.MountConfig{Options: mount.Options, BlockDev: isBlockDev},
 				)
 				if err != nil {
-					return errors.Wrapf(err, "adding SCSI physical disk mount %+v", mount)
+					return "", errors.Wrapf(err, "adding SCSI physical disk mount %+v", mount)
 				}
 				uvmPathForFile = scsiMount.GuestPath()
 				r.Add(scsiMount)
@@ -108,7 +113,7 @@ func allocateLinuxResources(ctx context.Context, coi *createOptionsInternal, r *
 					&scsi.MountConfig{Options: mount.Options, BlockDev: isBlockDev},
 				)
 				if err != nil {
-					return errors.Wrapf(err, "adding SCSI virtual disk mount %+v", mount)
+					return "", errors.Wrapf(err, "adding SCSI virtual disk mount %+v", mount)
 				}
 
 				uvmPathForFile = scsiMount.GuestPath()
@@ -126,7 +131,7 @@ func allocateLinuxResources(ctx context.Context, coi *createOptionsInternal, r *
 				// currently we only support 2M hugepage size
 				hugePageSubDirs := strings.Split(strings.TrimPrefix(mount.Source, guestpath.HugePagesMountPrefix), "/")
 				if len(hugePageSubDirs) < 2 {
-					return errors.Errorf(
+					return "", errors.Errorf(
 						`%s mount path is invalid, expected format: %s<hugepage-size>/<hugepage-src-location>`,
 						mount.Source,
 						guestpath.HugePagesMountPrefix,
@@ -135,14 +140,14 @@ func allocateLinuxResources(ctx context.Context, coi *createOptionsInternal, r *
 
 				// hugepages:// should be followed by pagesize
 				if hugePageSubDirs[0] != "2M" {
-					return errors.Errorf(`only 2M (megabytes) pagesize is supported, got %s`, hugePageSubDirs[0])
+					return "", errors.Errorf(`only 2M (megabytes) pagesize is supported, got %s`, hugePageSubDirs[0])
 				}
 				// Hugepages inside a container are backed by a mount created inside a UVM.
 				uvmPathForFile = mount.Source
 			} else {
 				st, err := os.Stat(hostPath)
 				if err != nil {
-					return errors.Wrap(err, "could not open bind mount target")
+					return "", errors.Wrap(err, "could not open bind mount target")
 				}
 				restrictAccess := false
 				var allowedNames []string
@@ -159,7 +164,7 @@ func allocateLinuxResources(ctx context.Context, coi *createOptionsInternal, r *
 
 				share, err := coi.HostingSystem.AddPlan9(ctx, hostPath, uvmPathForShare, readOnly, restrictAccess, allowedNames)
 				if err != nil {
-					return errors.Wrapf(err, "adding plan9 mount %+v", mount)
+					return "", errors.Wrapf(err, "adding plan9 mount %+v", mount)
 				}
 				r.Add(share)
 			}
@@ -168,16 +173,16 @@ func allocateLinuxResources(ctx context.Context, coi *createOptionsInternal, r *
 	}
 
 	if coi.HostingSystem == nil {
-		return nil
+		return "", nil
 	}
 
 	if coi.hasWindowsAssignedDevices() {
 		windowsDevices, closers, err := handleAssignedDevicesLCOW(ctx, coi.HostingSystem, coi.Spec.Annotations, coi.Spec.Windows.Devices)
 		if err != nil {
-			return err
+			return "", err
 		}
 		r.Add(closers...)
 		coi.Spec.Windows.Devices = windowsDevices
 	}
-	return nil
+	return guestRoot, nil
 }
