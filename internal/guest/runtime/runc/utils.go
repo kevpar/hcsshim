@@ -70,33 +70,6 @@ func (r *runcRuntime) makeContainerDir(id string) error {
 	return nil
 }
 
-// getLogDir gets the path to the runc logs directory.
-func (r *runcRuntime) getLogDir(id string) string {
-	return filepath.Join(r.runcLogBasePath, id)
-}
-
-// makeLogDir creates the runc logs directory if it doesnt exist.
-func (r *runcRuntime) makeLogDir(id string) error {
-	dir := r.getLogDir(id)
-	if err := os.MkdirAll(dir, os.ModeDir); err != nil {
-		return errors.Wrapf(err, "failed making runc log directory for container %s", id)
-	}
-	return nil
-}
-
-// getLogPath returns the path to the log file used by the runC wrapper for a particular container
-func (r *runcRuntime) getLogPath(id string) string {
-	return filepath.Join(r.getLogDir(id), "runc.log")
-}
-
-// getLogPath returns the path to the log file used by the runC wrapper.
-//
-//nolint:unused
-func (r *runcRuntime) getGlobalLogPath() string {
-	// runcLogBasePath should be created by r.initialize
-	return filepath.Join(r.runcLogBasePath, "global-runc.log")
-}
-
 // processExists returns true if the given process exists in /proc, false if
 // not.
 // It should be noted that processes which have exited, but have not yet been
@@ -144,10 +117,10 @@ func parseRuncError(s string) (err error) {
 	return err
 }
 
-func getRuncLogError(logPath string) error {
+func getRuncLogError(logPath string) (error, error) {
 	reader, err := os.OpenFile(logPath, syscall.O_RDONLY, 0644)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	defer reader.Close()
 
@@ -162,7 +135,7 @@ func getRuncLogError(logPath string) error {
 			lastErr = entry.asError()
 		}
 	}
-	return lastErr
+	return lastErr, nil
 }
 
 func runcCommandLog(logPath string, args ...string) *exec.Cmd {

@@ -21,7 +21,6 @@ import (
 	"github.com/Microsoft/hcsshim/internal/guest/gcserr"
 	"github.com/Microsoft/hcsshim/internal/guest/prot"
 	"github.com/Microsoft/hcsshim/internal/guest/runtime"
-	specInternal "github.com/Microsoft/hcsshim/internal/guest/spec"
 	"github.com/Microsoft/hcsshim/internal/guest/stdio"
 	"github.com/Microsoft/hcsshim/internal/guest/storage"
 	"github.com/Microsoft/hcsshim/internal/guest/transport"
@@ -46,6 +45,7 @@ const (
 
 type Container struct {
 	id    string
+	sbid  string
 	vsock transport.Transport
 
 	spec          *oci.Spec
@@ -189,17 +189,17 @@ func (c *Container) Kill(ctx context.Context, signal syscall.Signal) error {
 	return nil
 }
 
-func (c *Container) Delete(ctx context.Context) error {
+func (c *Container) Delete(ctx context.Context, sbCtx *mountContext) error {
 	entity := log.G(ctx).WithField(logfields.ContainerID, c.id)
 	entity.Info("opengcs::Container::Delete")
 	if c.isSandbox {
 		// remove user mounts in sandbox container
-		if err := storage.UnmountAllInPath(ctx, specInternal.SandboxMountsDir(c.id), true); err != nil {
+		if err := storage.UnmountAllInPath(ctx, sbCtx.sandboxMountsRoot, true); err != nil {
 			entity.WithError(err).Error("failed to unmount sandbox mounts")
 		}
 
 		// remove hugepages mounts in sandbox container
-		if err := storage.UnmountAllInPath(ctx, specInternal.HugePagesMountsDir(c.id), true); err != nil {
+		if err := storage.UnmountAllInPath(ctx, sbCtx.hugePagesRoot, true); err != nil {
 			entity.WithError(err).Error("failed to unmount hugepages mounts")
 		}
 	}

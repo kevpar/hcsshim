@@ -26,7 +26,7 @@ func networkingMountPaths() []string {
 // GenerateWorkloadContainerNetworkMounts generates an array of specs.Mount
 // required for container networking. Original spec is left untouched and
 // it's the responsibility of a caller to update it.
-func GenerateWorkloadContainerNetworkMounts(sandboxID string, spec *oci.Spec) []oci.Mount {
+func GenerateWorkloadContainerNetworkMounts(sandboxNetworkMountsRoot string, spec *oci.Spec) []oci.Mount {
 	var nMounts []oci.Mount
 
 	for _, mountPath := range networkingMountPaths() {
@@ -42,7 +42,7 @@ func GenerateWorkloadContainerNetworkMounts(sandboxID string, spec *oci.Spec) []
 		mt := oci.Mount{
 			Destination: mountPath,
 			Type:        "bind",
-			Source:      filepath.Join(SandboxRootDir(sandboxID), trimmedMountPath),
+			Source:      filepath.Join(sandboxNetworkMountsRoot, trimmedMountPath),
 			Options:     options,
 		}
 		nMounts = append(nMounts, mt)
@@ -60,31 +60,7 @@ func MountPresent(mountPath string, specMounts []oci.Mount) bool {
 	return false
 }
 
-// SandboxRootDir returns the sandbox container root directory inside UVM/host.
-func SandboxRootDir(sandboxID string) string {
-	return filepath.Join(guestpath.LCOWRootPrefixInUVM, sandboxID)
-}
-
-// SandboxMountsDir returns sandbox mounts directory inside UVM/host.
-func SandboxMountsDir(sandboxID string) string {
-	return filepath.Join(SandboxRootDir(sandboxID), "sandboxMounts")
-}
-
-// HugePagesMountsDir returns hugepages mounts directory inside UVM.
-func HugePagesMountsDir(sandboxID string) string {
-	return filepath.Join(SandboxRootDir(sandboxID), "hugepages")
-}
-
-// SandboxMountSource returns sandbox mount path inside UVM
-func SandboxMountSource(sandboxID, path string) string {
-	mountsDir := SandboxMountsDir(sandboxID)
+func SandboxMountSource(sandboxMountsRoot, path string) string {
 	subPath := strings.TrimPrefix(path, guestpath.SandboxMountPrefix)
-	return filepath.Join(mountsDir, subPath)
-}
-
-// HugePagesMountSource returns hugepages mount path inside UVM
-func HugePagesMountSource(sandboxID, path string) string {
-	mountsDir := HugePagesMountsDir(sandboxID)
-	subPath := strings.TrimPrefix(path, guestpath.HugePagesMountPrefix)
-	return filepath.Join(mountsDir, subPath)
+	return filepath.Join(sandboxMountsRoot, subPath)
 }

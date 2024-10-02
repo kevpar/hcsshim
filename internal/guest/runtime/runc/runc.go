@@ -31,8 +31,8 @@ func setSubreaper(i int) error {
 }
 
 // NewRuntime instantiates a new runcRuntime struct.
-func NewRuntime(logBasePath string) (runtime.Runtime, error) {
-	rtime := &runcRuntime{runcLogBasePath: logBasePath}
+func NewRuntime() (runtime.Runtime, error) {
+	rtime := &runcRuntime{}
 	if err := rtime.initialize(); err != nil {
 		return nil, err
 	}
@@ -41,15 +41,13 @@ func NewRuntime(logBasePath string) (runtime.Runtime, error) {
 
 // runcRuntime is an implementation of the Runtime interface which uses runC as
 // the container runtime.
-type runcRuntime struct {
-	runcLogBasePath string
-}
+type runcRuntime struct{}
 
 var _ runtime.Runtime = &runcRuntime{}
 
 // initialize sets up any state necessary for the runcRuntime to function.
 func (r *runcRuntime) initialize() error {
-	paths := [2]string{containerFilesDir, r.runcLogBasePath}
+	paths := []string{containerFilesDir}
 	for _, p := range paths {
 		_, err := os.Stat(p)
 		if err != nil {
@@ -155,7 +153,7 @@ func (r *runcRuntime) waitOnProcess(pid int) (int, error) {
 
 // runCreateCommand sets up the arguments for calling runc create.
 func (r *runcRuntime) runCreateCommand(id string, bundlePath string, stdioSet *stdio.ConnectionSet) (runtime.Container, error) {
-	c := &container{r: r, id: id}
+	c := &container{r: r, id: id, bundle: bundlePath}
 	if err := r.makeContainerDir(id); err != nil {
 		return nil, err
 	}

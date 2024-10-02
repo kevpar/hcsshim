@@ -27,7 +27,6 @@ import (
 	"github.com/Microsoft/hcsshim/internal/guest/policy"
 	"github.com/Microsoft/hcsshim/internal/guest/prot"
 	"github.com/Microsoft/hcsshim/internal/guest/runtime"
-	"github.com/Microsoft/hcsshim/internal/guest/spec"
 	"github.com/Microsoft/hcsshim/internal/guest/stdio"
 	"github.com/Microsoft/hcsshim/internal/guest/storage"
 	"github.com/Microsoft/hcsshim/internal/guest/storage/overlay"
@@ -79,6 +78,9 @@ type Host struct {
 	// hostMounts keeps the state of currently mounted devices and file systems,
 	// which is used for GCS hardening.
 	hostMounts *hostMounts
+
+	sbLock  sync.Mutex
+	sbCtxts map[string]*mountContext
 }
 
 func NewHost(rtime runtime.Runtime, vsock transport.Transport, initialEnforcer securitypolicy.SecurityPolicyEnforcer, logWriter io.Writer) *Host {
@@ -92,6 +94,7 @@ func NewHost(rtime runtime.Runtime, vsock transport.Transport, initialEnforcer s
 		securityPolicyEnforcer:    initialEnforcer,
 		logWriter:                 logWriter,
 		hostMounts:                newHostMounts(),
+		sbCtxts:                   make(map[string]*mountContext),
 	}
 }
 
@@ -264,6 +267,18 @@ func (h *Host) GetCreatedContainer(id string) (*Container, error) {
 	return c, nil
 }
 
+func (h *Host) DeleteContainer(ctx context.Context, id string) error {
+	c, err := h.GetCreatedContainer(id)
+	if err != nil {
+		return err
+	}
+	sbCtx, err := h.getSbctx(c.sbid)
+	if err != nil {
+		return err
+	}
+	return c.Delete(ctx, sbCtx)
+}
+
 func (h *Host) AddContainer(id string, c *Container) error {
 	h.containersMutex.Lock()
 	defer h.containersMutex.Unlock()
@@ -275,10 +290,10 @@ func (h *Host) AddContainer(id string, c *Container) error {
 	return nil
 }
 
-func setupSandboxMountsPath(id string) (err error) {
-	mountPath := spec.SandboxMountsDir(id)
+func setupSandboxMountsPath(sbCtx *mountContext) (err error) {
+	mountPath := sbCtx.sandboxMountsRoot
 	if err := os.MkdirAll(mountPath, 0755); err != nil {
-		return errors.Wrapf(err, "failed to create sandboxMounts dir in sandbox %v", id)
+		return errors.Wrapf(err, "failed to create sandboxMounts dir in sandbox %v", sbCtx.id)
 	}
 	defer func() {
 		if err != nil {
@@ -289,16 +304,38 @@ func setupSandboxMountsPath(id string) (err error) {
 	return storage.MountRShared(mountPath)
 }
 
-func setupSandboxHugePageMountsPath(id string) error {
-	mountPath := spec.HugePagesMountsDir(id)
+func setupSandboxHugePageMountsPath(sbCtx *mountContext) error {
+	mountPath := sbCtx.hugePagesRoot
 	if err := os.MkdirAll(mountPath, 0755); err != nil {
-		return errors.Wrapf(err, "failed to create hugepage Mounts dir in sandbox %v", id)
+		return errors.Wrapf(err, "failed to create hugepage Mounts dir in sandbox %v", sbCtx.id)
 	}
 
 	return storage.MountRShared(mountPath)
 }
 
+type mountContext struct {
+	id                string
+	bundleRoot        string
+	sandboxMountsRoot string
+	hugePagesRoot     string
+	networkMountsRoot string
+}
+
+func (h *Host) getSbctx(sandboxID string) (*mountContext, error) {
+	h.sbLock.Lock()
+	defer h.sbLock.Unlock()
+	sbCtx, ok := h.sbCtxts[sandboxID]
+	if !ok {
+		return nil, fmt.Errorf("sandbox %s not found", sandboxID)
+	}
+	return sbCtx, nil
+}
+
 func (h *Host) CreateContainer(ctx context.Context, id string, settings *prot.VMHostedContainerSettingsV2) (_ *Container, err error) {
+	log.G(ctx).WithFields(logrus.Fields{
+		"bundle":  settings.OCIBundlePath,
+		"scratch": settings.ScratchDirPath,
+	}).Info("GCS CREATECONTAINER")
 	criType, isCRI := settings.OCISpecification.Annotations[annotations.KubernetesContainerType]
 	c := &Container{
 		id:             id,
@@ -334,9 +371,28 @@ func (h *Host) CreateContainer(ctx context.Context, id string, settings *prot.VM
 	if isCRI {
 		switch criType {
 		case "sandbox":
+			c.sbid = sandboxID
+			sbCtx := &mountContext{
+				id:                sandboxID,
+				bundleRoot:        settings.OCIBundlePath,
+				sandboxMountsRoot: filepath.Join(settings.OCIBundlePath, "sandboxMounts"),
+				hugePagesRoot:     filepath.Join(settings.OCIBundlePath, "hugepages"),
+				networkMountsRoot: settings.OCIBundlePath,
+			}
+			h.sbLock.Lock()
+			h.sbCtxts[sandboxID] = sbCtx
+			h.sbLock.Unlock()
+			defer func() {
+				if err != nil {
+					h.sbLock.Lock()
+					delete(h.sbCtxts, sandboxID)
+					h.sbLock.Unlock()
+				}
+			}()
+
 			// Capture namespaceID if any because setupSandboxContainerSpec clears the Windows section.
 			namespaceID = getNetworkNamespaceID(settings.OCISpecification)
-			err = setupSandboxContainerSpec(ctx, id, settings.OCISpecification)
+			err = setupSandboxContainerSpec(ctx, sbCtx, id, settings.OCISpecification)
 			if err != nil {
 				return nil, err
 			}
@@ -346,11 +402,11 @@ func (h *Host) CreateContainer(ctx context.Context, id string, settings *prot.VM
 				}
 			}()
 
-			if err = setupSandboxMountsPath(id); err != nil {
+			if err = setupSandboxMountsPath(sbCtx); err != nil {
 				return nil, err
 			}
 
-			if err = setupSandboxHugePageMountsPath(id); err != nil {
+			if err = setupSandboxHugePageMountsPath(sbCtx); err != nil {
 				return nil, err
 			}
 
@@ -363,7 +419,13 @@ func (h *Host) CreateContainer(ctx context.Context, id string, settings *prot.VM
 			if !ok || sid == "" {
 				return nil, errors.Errorf("unsupported 'io.kubernetes.cri.sandbox-id': '%s'", sid)
 			}
-			if err := setupWorkloadContainerSpec(ctx, sid, id, settings.OCISpecification, settings.OCIBundlePath); err != nil {
+			c.sbid = sandboxID
+			sbCtx, err := h.getSbctx(sandboxID)
+			if err != nil {
+				return nil, err
+			}
+
+			if err := setupWorkloadContainerSpec(ctx, sbCtx, id, settings.OCISpecification, settings.OCIBundlePath); err != nil {
 				return nil, err
 			}
 
@@ -390,7 +452,15 @@ func (h *Host) CreateContainer(ctx context.Context, id string, settings *prot.VM
 	} else {
 		// Capture namespaceID if any because setupStandaloneContainerSpec clears the Windows section.
 		namespaceID = getNetworkNamespaceID(settings.OCISpecification)
-		if err := setupStandaloneContainerSpec(ctx, id, settings.OCISpecification); err != nil {
+		sbCtx := &mountContext{
+			id:                id,
+			bundleRoot:        settings.OCIBundlePath,
+			sandboxMountsRoot: filepath.Join(settings.OCIBundlePath, "sandboxMounts"),
+			hugePagesRoot:     filepath.Join(settings.OCIBundlePath, "hugepages"),
+			networkMountsRoot: settings.OCIBundlePath,
+		}
+		// TODO: Proper caching of sbCtx, deletion, etc.
+		if err := setupStandaloneContainerSpec(ctx, sbCtx, id, settings.OCISpecification); err != nil {
 			return nil, err
 		}
 		defer func() {

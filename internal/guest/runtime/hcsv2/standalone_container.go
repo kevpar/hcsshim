@@ -15,34 +15,17 @@ import (
 
 	"github.com/Microsoft/hcsshim/internal/guest/network"
 	specInternal "github.com/Microsoft/hcsshim/internal/guest/spec"
-	"github.com/Microsoft/hcsshim/internal/guestpath"
 	"github.com/Microsoft/hcsshim/internal/oc"
 )
 
-func getStandaloneRootDir(id string) string {
-	return filepath.Join(guestpath.LCOWRootPrefixInUVM, id)
-}
-
-func getStandaloneHostnamePath(id string) string {
-	return filepath.Join(getStandaloneRootDir(id), "hostname")
-}
-
-func getStandaloneHostsPath(id string) string {
-	return filepath.Join(getStandaloneRootDir(id), "hosts")
-}
-
-func getStandaloneResolvPath(id string) string {
-	return filepath.Join(getStandaloneRootDir(id), "resolv.conf")
-}
-
-func setupStandaloneContainerSpec(ctx context.Context, id string, spec *oci.Spec) (err error) {
+func setupStandaloneContainerSpec(ctx context.Context, sbCtx *mountContext, id string, spec *oci.Spec) (err error) {
 	ctx, span := oc.StartSpan(ctx, "hcsv2::setupStandaloneContainerSpec")
 	defer span.End()
 	defer func() { oc.SetSpanStatus(span, err) }()
 	span.AddAttributes(trace.StringAttribute("cid", id))
 
 	// Generate the standalone root dir
-	rootDir := getStandaloneRootDir(id)
+	rootDir := sbCtx.bundleRoot
 	if err := os.MkdirAll(rootDir, 0755); err != nil {
 		return errors.Wrapf(err, "failed to create container root directory %q", rootDir)
 	}
@@ -63,7 +46,7 @@ func setupStandaloneContainerSpec(ctx context.Context, id string, spec *oci.Spec
 
 	// Write the hostname
 	if !specInternal.MountPresent("/etc/hostname", spec.Mounts) {
-		standaloneHostnamePath := getStandaloneHostnamePath(id)
+		standaloneHostnamePath := filepath.Join(sbCtx.networkMountsRoot, "hostname")
 		if err := os.WriteFile(standaloneHostnamePath, []byte(hostname+"\n"), 0644); err != nil {
 			return errors.Wrapf(err, "failed to write hostname to %q", standaloneHostnamePath)
 		}
@@ -71,7 +54,7 @@ func setupStandaloneContainerSpec(ctx context.Context, id string, spec *oci.Spec
 		mt := oci.Mount{
 			Destination: "/etc/hostname",
 			Type:        "bind",
-			Source:      getStandaloneHostnamePath(id),
+			Source:      standaloneHostnamePath,
 			Options:     []string{"bind"},
 		}
 		if isRootReadonly(spec) {
@@ -83,7 +66,7 @@ func setupStandaloneContainerSpec(ctx context.Context, id string, spec *oci.Spec
 	// Write the hosts
 	if !specInternal.MountPresent("/etc/hosts", spec.Mounts) {
 		standaloneHostsContent := network.GenerateEtcHostsContent(ctx, hostname)
-		standaloneHostsPath := getStandaloneHostsPath(id)
+		standaloneHostsPath := filepath.Join(sbCtx.networkMountsRoot, "hosts")
 		if err := os.WriteFile(standaloneHostsPath, []byte(standaloneHostsContent), 0644); err != nil {
 			return errors.Wrapf(err, "failed to write standalone hosts to %q", standaloneHostsPath)
 		}
@@ -91,7 +74,7 @@ func setupStandaloneContainerSpec(ctx context.Context, id string, spec *oci.Spec
 		mt := oci.Mount{
 			Destination: "/etc/hosts",
 			Type:        "bind",
-			Source:      getStandaloneHostsPath(id),
+			Source:      standaloneHostsPath,
 			Options:     []string{"bind"},
 		}
 		if isRootReadonly(spec) {
@@ -116,7 +99,7 @@ func setupStandaloneContainerSpec(ctx context.Context, id string, spec *oci.Spec
 		if err != nil {
 			return errors.Wrap(err, "failed to generate standalone resolv.conf content")
 		}
-		standaloneResolvPath := getStandaloneResolvPath(id)
+		standaloneResolvPath := filepath.Join(sbCtx.networkMountsRoot, "resolv.conf")
 		if err := os.WriteFile(standaloneResolvPath, []byte(resolvContent), 0644); err != nil {
 			return errors.Wrap(err, "failed to write standalone resolv.conf")
 		}
@@ -124,7 +107,7 @@ func setupStandaloneContainerSpec(ctx context.Context, id string, spec *oci.Spec
 		mt := oci.Mount{
 			Destination: "/etc/resolv.conf",
 			Type:        "bind",
-			Source:      getStandaloneResolvPath(id),
+			Source:      standaloneResolvPath,
 			Options:     []string{"bind"},
 		}
 		if isRootReadonly(spec) {

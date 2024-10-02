@@ -14,31 +14,18 @@ import (
 	"go.opencensus.io/trace"
 
 	"github.com/Microsoft/hcsshim/internal/guest/network"
-	specInternal "github.com/Microsoft/hcsshim/internal/guest/spec"
 	"github.com/Microsoft/hcsshim/internal/oc"
 	"github.com/Microsoft/hcsshim/pkg/annotations"
 )
 
-func getSandboxHostnamePath(id string) string {
-	return filepath.Join(specInternal.SandboxRootDir(id), "hostname")
-}
-
-func getSandboxHostsPath(id string) string {
-	return filepath.Join(specInternal.SandboxRootDir(id), "hosts")
-}
-
-func getSandboxResolvPath(id string) string {
-	return filepath.Join(specInternal.SandboxRootDir(id), "resolv.conf")
-}
-
-func setupSandboxContainerSpec(ctx context.Context, id string, spec *oci.Spec) (err error) {
+func setupSandboxContainerSpec(ctx context.Context, sbCtx *mountContext, id string, spec *oci.Spec) (err error) {
 	ctx, span := oc.StartSpan(ctx, "hcsv2::setupSandboxContainerSpec")
 	defer span.End()
 	defer func() { oc.SetSpanStatus(span, err) }()
 	span.AddAttributes(trace.StringAttribute("cid", id))
 
 	// Generate the sandbox root dir
-	rootDir := specInternal.SandboxRootDir(id)
+	rootDir := sbCtx.bundleRoot
 	if err := os.MkdirAll(rootDir, 0755); err != nil {
 		return errors.Wrapf(err, "failed to create sandbox root directory %q", rootDir)
 	}
@@ -58,14 +45,14 @@ func setupSandboxContainerSpec(ctx context.Context, id string, spec *oci.Spec) (
 		}
 	}
 
-	sandboxHostnamePath := getSandboxHostnamePath(id)
+	sandboxHostnamePath := filepath.Join(sbCtx.networkMountsRoot, "hostname")
 	if err := os.WriteFile(sandboxHostnamePath, []byte(hostname+"\n"), 0644); err != nil {
 		return errors.Wrapf(err, "failed to write hostname to %q", sandboxHostnamePath)
 	}
 
 	// Write the hosts
 	sandboxHostsContent := network.GenerateEtcHostsContent(ctx, hostname)
-	sandboxHostsPath := getSandboxHostsPath(id)
+	sandboxHostsPath := filepath.Join(sbCtx.networkMountsRoot, "hosts")
 	if err := os.WriteFile(sandboxHostsPath, []byte(sandboxHostsContent), 0644); err != nil {
 		return errors.Wrapf(err, "failed to write sandbox hosts to %q", sandboxHostsPath)
 	}
@@ -88,7 +75,7 @@ func setupSandboxContainerSpec(ctx context.Context, id string, spec *oci.Spec) (
 	if err != nil {
 		return errors.Wrap(err, "failed to generate sandbox resolv.conf content")
 	}
-	sandboxResolvPath := getSandboxResolvPath(id)
+	sandboxResolvPath := filepath.Join(sbCtx.networkMountsRoot, "resolv.conf")
 	if err := os.WriteFile(sandboxResolvPath, []byte(resolvContent), 0644); err != nil {
 		return errors.Wrap(err, "failed to write sandbox resolv.conf")
 	}

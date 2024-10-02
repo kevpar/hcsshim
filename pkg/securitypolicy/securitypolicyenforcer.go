@@ -16,7 +16,6 @@ import (
 
 	oci "github.com/opencontainers/runtime-spec/specs-go"
 
-	specInternal "github.com/Microsoft/hcsshim/internal/guest/spec"
 	"github.com/Microsoft/hcsshim/internal/guestpath"
 	"github.com/pkg/errors"
 )
@@ -861,9 +860,9 @@ func (c *securityPolicyContainer) matchMount(sandboxID string, m oci.Mount) (err
 // will be, so the prefix substitution needs to happen during runtime.
 func substituteUVMPath(sandboxID string, m mountInternal) mountInternal {
 	if strings.HasPrefix(m.Source, guestpath.SandboxMountPrefix) {
-		m.Source = specInternal.SandboxMountSource(sandboxID, m.Source)
+		// m.Source = specInternal.SandboxMountSource(sandboxID, m.Source)
 	} else if strings.HasPrefix(m.Source, guestpath.HugePagesMountPrefix) {
-		m.Source = specInternal.HugePagesMountSource(sandboxID, m.Source)
+		// m.Source = specInternal.HugePagesMountSource(sandboxID, m.Source)
 	}
 	return m
 }

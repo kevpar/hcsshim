@@ -32,14 +32,14 @@ func mkdirAllModePerm(target string) error {
 	return os.MkdirAll(target, os.ModePerm)
 }
 
-func updateSandboxMounts(sbid string, spec *oci.Spec) error {
+func updateSandboxMounts(sandboxMountRoot string, spec *oci.Spec) error {
 	for i, m := range spec.Mounts {
 		if strings.HasPrefix(m.Source, guestpath.SandboxMountPrefix) {
-			sandboxSource := specInternal.SandboxMountSource(sbid, m.Source)
+			sandboxSource := specInternal.SandboxMountSource(sandboxMountRoot, m.Source)
 
 			// filepath.Join cleans the resulting path before returning, so it would resolve the relative path if one was given.
 			// Hence, we need to ensure that the resolved path is still under the correct directory
-			if !strings.HasPrefix(sandboxSource, specInternal.SandboxMountsDir(sbid)) {
+			if !strings.HasPrefix(sandboxSource, sandboxMountRoot) {
 				return errors.Errorf("mount path %v for mount %v is not within sandbox's mounts dir", sandboxSource, m.Source)
 			}
 
@@ -56,10 +56,10 @@ func updateSandboxMounts(sbid string, spec *oci.Spec) error {
 	return nil
 }
 
-func updateHugePageMounts(sbid string, spec *oci.Spec) error {
+func updateHugePageMounts(hugePagesRoot string, spec *oci.Spec) error {
 	for i, m := range spec.Mounts {
 		if strings.HasPrefix(m.Source, guestpath.HugePagesMountPrefix) {
-			mountsDir := specInternal.HugePagesMountsDir(sbid)
+			mountsDir := hugePagesRoot
 			subPath := strings.TrimPrefix(m.Source, guestpath.HugePagesMountPrefix)
 			pageSize := strings.Split(subPath, string(os.PathSeparator))[0]
 			hugePageMountSource := filepath.Join(mountsDir, subPath)
@@ -134,12 +134,12 @@ func specHasGPUDevice(spec *oci.Spec) bool {
 	return false
 }
 
-func setupWorkloadContainerSpec(ctx context.Context, sbid, id string, spec *oci.Spec, ociBundlePath string) (err error) {
+func setupWorkloadContainerSpec(ctx context.Context, sbCtx *mountContext, id string, spec *oci.Spec, ociBundlePath string) (err error) {
 	ctx, span := oc.StartSpan(ctx, "hcsv2::setupWorkloadContainerSpec")
 	defer span.End()
 	defer func() { oc.SetSpanStatus(span, err) }()
 	span.AddAttributes(
-		trace.StringAttribute("sandboxID", sbid),
+		trace.StringAttribute("sandboxID", sbCtx.id),
 		trace.StringAttribute("cid", id))
 
 	// Verify no hostname
@@ -148,21 +148,21 @@ func setupWorkloadContainerSpec(ctx context.Context, sbid, id string, spec *oci.
 	}
 
 	// update any sandbox mounts with the sandboxMounts directory path and create files
-	if err = updateSandboxMounts(sbid, spec); err != nil {
-		return errors.Wrapf(err, "failed to update sandbox mounts for container %v in sandbox %v", id, sbid)
+	if err = updateSandboxMounts(sbCtx.sandboxMountsRoot, spec); err != nil {
+		return errors.Wrapf(err, "failed to update sandbox mounts for container %v in sandbox %v", id, sbCtx.id)
 	}
 
-	if err = updateHugePageMounts(sbid, spec); err != nil {
-		return errors.Wrapf(err, "failed to update hugepages mounts for container %v in sandbox %v", id, sbid)
+	if err = updateHugePageMounts(sbCtx.hugePagesRoot, spec); err != nil {
+		return errors.Wrapf(err, "failed to update hugepages mounts for container %v in sandbox %v", id, sbCtx.id)
 	}
 
 	if err = updateBlockDeviceMounts(spec); err != nil {
-		return fmt.Errorf("failed to update block device mounts for container %v in sandbox %v: %w", id, sbid, err)
+		return fmt.Errorf("failed to update block device mounts for container %v in sandbox %v: %w", id, sbCtx.id, err)
 	}
 
 	// Add default mounts for container networking (e.g. /etc/hostname, /etc/hosts),
 	// if spec didn't override them explicitly.
-	networkingMounts := specInternal.GenerateWorkloadContainerNetworkMounts(sbid, spec)
+	networkingMounts := specInternal.GenerateWorkloadContainerNetworkMounts(sbCtx.networkMountsRoot, spec)
 	spec.Mounts = append(spec.Mounts, networkingMounts...)
 
 	// TODO: JTERRY75 /dev/shm is not properly setup for LCOW I believe. CRI

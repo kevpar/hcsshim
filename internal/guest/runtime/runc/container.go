@@ -5,6 +5,7 @@ package runc
 
 import (
 	"encoding/json"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -29,6 +30,7 @@ type container struct {
 	// ownsPidNamespace indicates whether the container's init process is also
 	// the init process for its pid namespace.
 	ownsPidNamespace bool
+	bundle           string
 }
 
 var _ runtime.Container = &container{}
@@ -49,15 +51,19 @@ func (c *container) PipeRelay() *stdio.PipeRelay {
 	return c.init.pipeRelay
 }
 
+func (c *container) getLogPath() string {
+	return filepath.Join(c.bundle, "runc.log")
+}
+
 // Start unblocks the container's init process created by the call to
 // CreateContainer.
 func (c *container) Start() error {
-	logPath := c.r.getLogPath(c.id)
+	logPath := c.getLogPath()
 	args := []string{"start", c.id}
 	cmd := runcCommandLog(logPath, args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		runcErr := getRuncLogError(logPath)
+		runcErr, _ := getRuncLogError(logPath)
 		c.r.cleanupContainer(c.id) //nolint:errcheck
 		return errors.Wrapf(runcErr, "runc start failed with %v: %s", err, string(out))
 	}
@@ -117,12 +123,12 @@ func (c *container) Pause() error {
 
 // Resume unsuspends processes running in the container.
 func (c *container) Resume() error {
-	logPath := c.r.getLogPath(c.id)
+	logPath := c.getLogPath()
 	args := []string{"resume", c.id}
 	cmd := runcCommandLog(logPath, args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		runcErr := getRuncLogError(logPath)
+		runcErr, _ := getRuncLogError(logPath)
 		return errors.Wrapf(runcErr, "runc resume failed with %v: %s", err, string(out))
 	}
 	return nil
@@ -344,11 +350,12 @@ func (c *container) startProcess(
 	if err := setSubreaper(1); err != nil {
 		return nil, errors.Wrapf(err, "failed to set process as subreaper for process in container %s", c.id)
 	}
-	if err := c.r.makeLogDir(c.id); err != nil {
-		return nil, err
+
+	logPath := c.getLogPath()
+	if err := os.MkdirAll(filepath.Dir(logPath), os.ModeDir); err != nil {
+		return nil, errors.Wrapf(err, "failed making runc log directory for container %s", c.id)
 	}
 
-	logPath := c.r.getLogPath(c.id)
 	args = append(args, "--pid-file", filepath.Join(tempProcessDir, "pid"))
 
 	var sockListener *net.UnixListener
@@ -390,7 +397,12 @@ func (c *container) startProcess(
 	}
 
 	if err := cmd.Run(); err != nil {
-		runcErr := getRuncLogError(logPath)
+		runcErr, fetchErr := getRuncLogError(logPath)
+		if fetchErr != nil {
+			runcErr = fmt.Errorf("error reading log: %w", fetchErr)
+		} else if runcErr == nil {
+			runcErr = fmt.Errorf("unexpected: found no error in %s", logPath)
+		}
 		return nil, errors.Wrapf(runcErr, "failed to run runc create/exec call for container %s with %v", c.id, err)
 	}
 

@@ -467,14 +467,9 @@ func (b *Bridge) deleteContainerStateV2(r *Request) (_ RequestResponse, err erro
 		return nil, errors.Wrapf(err, "failed to unmarshal JSON in message \"%s\"", r.Message)
 	}
 
-	c, err := b.hostState.GetCreatedContainer(request.ContainerID)
-	if err != nil {
-		return nil, err
-	}
 	// remove container state regardless of delete's success
 	defer b.hostState.RemoveContainer(request.ContainerID)
-
-	if err := c.Delete(ctx); err != nil {
+	if err := b.hostState.DeleteContainer(ctx, request.ContainerID); err != nil {
 		return nil, err
 	}
 
