@@ -134,7 +134,7 @@ func specHasGPUDevice(spec *oci.Spec) bool {
 	return false
 }
 
-func setupWorkloadContainerSpec(ctx context.Context, sbCtx *mountContext, id string, spec *oci.Spec, ociBundlePath string) (err error) {
+func setupWorkloadContainerSpec(ctx context.Context, sbCtx *sandboxContext, id string, spec *oci.Spec, ociBundlePath string) (err error) {
 	ctx, span := oc.StartSpan(ctx, "hcsv2::setupWorkloadContainerSpec")
 	defer span.End()
 	defer func() { oc.SetSpanStatus(span, err) }()

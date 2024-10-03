@@ -80,7 +80,7 @@ type Host struct {
 	hostMounts *hostMounts
 
 	sbLock  sync.Mutex
-	sbCtxts map[string]*mountContext
+	sbCtxts map[string]*sandboxContext
 }
 
 func NewHost(rtime runtime.Runtime, vsock transport.Transport, initialEnforcer securitypolicy.SecurityPolicyEnforcer, logWriter io.Writer) *Host {
@@ -94,7 +94,7 @@ func NewHost(rtime runtime.Runtime, vsock transport.Transport, initialEnforcer s
 		securityPolicyEnforcer:    initialEnforcer,
 		logWriter:                 logWriter,
 		hostMounts:                newHostMounts(),
-		sbCtxts:                   make(map[string]*mountContext),
+		sbCtxts:                   make(map[string]*sandboxContext),
 	}
 }
 
@@ -290,7 +290,7 @@ func (h *Host) AddContainer(id string, c *Container) error {
 	return nil
 }
 
-func setupSandboxMountsPath(sbCtx *mountContext) (err error) {
+func setupSandboxMountsPath(sbCtx *sandboxContext) (err error) {
 	mountPath := sbCtx.sandboxMountsRoot
 	if err := os.MkdirAll(mountPath, 0755); err != nil {
 		return errors.Wrapf(err, "failed to create sandboxMounts dir in sandbox %v", sbCtx.id)
@@ -304,7 +304,7 @@ func setupSandboxMountsPath(sbCtx *mountContext) (err error) {
 	return storage.MountRShared(mountPath)
 }
 
-func setupSandboxHugePageMountsPath(sbCtx *mountContext) error {
+func setupSandboxHugePageMountsPath(sbCtx *sandboxContext) error {
 	mountPath := sbCtx.hugePagesRoot
 	if err := os.MkdirAll(mountPath, 0755); err != nil {
 		return errors.Wrapf(err, "failed to create hugepage Mounts dir in sandbox %v", sbCtx.id)
@@ -313,7 +313,7 @@ func setupSandboxHugePageMountsPath(sbCtx *mountContext) error {
 	return storage.MountRShared(mountPath)
 }
 
-type mountContext struct {
+type sandboxContext struct {
 	id                string
 	bundleRoot        string
 	sandboxMountsRoot string
@@ -321,7 +321,7 @@ type mountContext struct {
 	networkMountsRoot string
 }
 
-func (h *Host) getSbctx(sandboxID string) (*mountContext, error) {
+func (h *Host) getSbctx(sandboxID string) (*sandboxContext, error) {
 	h.sbLock.Lock()
 	defer h.sbLock.Unlock()
 	sbCtx, ok := h.sbCtxts[sandboxID]
@@ -372,7 +372,7 @@ func (h *Host) CreateContainer(ctx context.Context, id string, settings *prot.VM
 		switch criType {
 		case "sandbox":
 			c.sbid = sandboxID
-			sbCtx := &mountContext{
+			sbCtx := &sandboxContext{
 				id:                sandboxID,
 				bundleRoot:        settings.OCIBundlePath,
 				sandboxMountsRoot: filepath.Join(settings.OCIBundlePath, "sandboxMounts"),
@@ -452,7 +452,7 @@ func (h *Host) CreateContainer(ctx context.Context, id string, settings *prot.VM
 	} else {
 		// Capture namespaceID if any because setupStandaloneContainerSpec clears the Windows section.
 		namespaceID = getNetworkNamespaceID(settings.OCISpecification)
-		sbCtx := &mountContext{
+		sbCtx := &sandboxContext{
 			id:                id,
 			bundleRoot:        settings.OCIBundlePath,
 			sandboxMountsRoot: filepath.Join(settings.OCIBundlePath, "sandboxMounts"),

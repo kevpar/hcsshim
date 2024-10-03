@@ -18,7 +18,7 @@ import (
 	"github.com/Microsoft/hcsshim/pkg/annotations"
 )
 
-func setupSandboxContainerSpec(ctx context.Context, sbCtx *mountContext, id string, spec *oci.Spec) (err error) {
+func setupSandboxContainerSpec(ctx context.Context, sbCtx *sandboxContext, id string, spec *oci.Spec) (err error) {
 	ctx, span := oc.StartSpan(ctx, "hcsv2::setupSandboxContainerSpec")
 	defer span.End()
 	defer func() { oc.SetSpanStatus(span, err) }()

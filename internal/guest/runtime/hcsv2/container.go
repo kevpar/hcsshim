@@ -189,7 +189,7 @@ func (c *Container) Kill(ctx context.Context, signal syscall.Signal) error {
 	return nil
 }
 
-func (c *Container) Delete(ctx context.Context, sbCtx *mountContext) error {
+func (c *Container) Delete(ctx context.Context, sbCtx *sandboxContext) error {
 	entity := log.G(ctx).WithField(logfields.ContainerID, c.id)
 	entity.Info("opengcs::Container::Delete")
 	if c.isSandbox {
